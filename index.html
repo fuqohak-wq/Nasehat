@@ -4,14 +4,11 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Nasehat Harian Mas Fuqohak</title>
-    <!-- Tailwind CSS CDN -->
+    <!-- Tailwind CSS -->
     <script src="https://cdn.tailwindcss.com"></script>
-    <!-- Google Fonts -->
     <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@300;400;500;600;700&display=swap" rel="stylesheet">
     <style>
-        body {
-            font-family: 'Plus Jakarta Sans', sans-serif;
-        }
+        body { font-family: 'Plus Jakarta Sans', sans-serif; }
     </style>
 </head>
 <body class="bg-slate-50 text-slate-800 min-h-screen">
@@ -20,30 +17,33 @@
         <!-- Header -->
         <header class="text-center mb-10">
             <h1 class="text-3xl font-extrabold text-slate-900 tracking-tight sm:text-4xl">
-                Nasehat & Analisis Harian
+                Nasehat & Analisis Harian 💡
             </h1>
             <p class="mt-2 text-lg text-slate-600">
-                Panduan personal berbasis psikologi kognitif dan neurosains untuk Mas Fuqohak
+                Wawasan segar kolaborasi Humor, Filsafat, Agama, dan Neurosains khusus Mas Fuqohak
             </p>
-            <button id="btnRefresh" onclick="fetchNasehat()" class="mt-6 px-6 py-2.5 bg-indigo-600 hover:bg-indigo-700 active:scale-95 transition-all text-white font-medium rounded-full shadow-md hover:shadow-lg focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:ring-offset-2">
-                Ambil Nasehat Terbaru
-            </button>
+            
+            <div class="mt-6">
+                <button id="btnRefresh" onclick="loadData(true)" class="px-6 py-3 bg-gradient-to-r from-indigo-600 to-purple-600 hover:from-indigo-700 hover:to-purple-700 active:scale-95 transition-all text-white font-medium rounded-full shadow-md hover:shadow-lg focus:outline-none">
+                    🔄 Ambil Nasehat Baru (Realtime Sync AI)
+                </button>
+            </div>
+            
+            <!-- Petunjuk Waktu Sync -->
+            <p id="txtSyncTime" class="text-xs text-slate-400 mt-3 italic hidden">
+                Nasehat ini terakhir diperbarui dari Gemini AI pada pukul: <span id="metaSync" class="font-bold text-indigo-600">-</span>
+            </p>
         </header>
 
         <!-- Loader -->
         <div id="loader" class="hidden my-20 text-center">
             <div class="inline-block animate-spin rounded-full h-12 w-12 border-t-2 border-b-2 border-indigo-600"></div>
-            <p class="mt-4 text-slate-500 font-medium animate-pulse">Menghubungkan ke Gemini AI & menganalisis mood Anda...</p>
+            <p id="loaderText" class="mt-4 text-slate-500 font-medium animate-pulse">Memuat data...</p>
         </div>
 
         <!-- Error Message -->
         <div id="errorMessage" class="hidden bg-red-50 border-l-4 border-red-500 p-4 rounded-r-xl mb-8">
             <div class="flex">
-                <div class="flex-shrink-0">
-                    <svg class="h-5 w-5 text-red-500" viewBox="0 0 20 20" fill="currentColor">
-                        <path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zM8.707 7.293a1 1 0 00-1.414 1.414L8.586 10l-1.293 1.293a1 1 0 101.414 1.414L10 11.414l1.293 1.293a1 1 0 001.414-1.414L11.414 10l1.293-1.293a1 1 0 00-1.414-1.414L10 8.586 8.707 7.293z" clip-rule="evenodd"/>
-                    </svg>
-                </div>
                 <div class="ml-3">
                     <h3 class="text-sm font-semibold text-red-800">Terjadi Kesalahan</h3>
                     <p id="errorText" class="text-xs text-red-700 mt-1"></p>
@@ -53,19 +53,18 @@
 
         <!-- Main Content -->
         <div id="content" class="hidden space-y-8">
-            
-            <!-- Metadata Cards (Mood & Schedule) -->
+            <!-- Metadata Cards -->
             <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
                 <div class="bg-white p-5 rounded-2xl shadow-sm border border-slate-100 flex flex-col justify-between">
-                    <span class="text-xs font-semibold text-slate-400 uppercase tracking-wider">Jam Sekarang</span>
+                    <span class="text-xs font-semibold text-slate-400 uppercase tracking-wider">Halaman Dibuka Jam</span>
                     <span id="metaJam" class="text-2xl font-bold text-slate-800 mt-2">-</span>
                 </div>
                 <div class="bg-white p-5 rounded-2xl shadow-sm border border-slate-100 flex flex-col justify-between">
-                    <span class="text-xs font-semibold text-slate-400 uppercase tracking-wider">Kegiatan Mestinya</span>
+                    <span class="text-xs font-semibold text-slate-400 uppercase tracking-wider">Jadwal Seharusnya</span>
                     <span id="metaKegiatan" class="text-lg font-bold text-slate-800 mt-2 leading-snug">-</span>
                 </div>
                 <div class="bg-white p-5 rounded-2xl shadow-sm border border-indigo-100 bg-indigo-50/20 flex flex-col justify-between">
-                    <span class="text-xs font-semibold text-indigo-500 uppercase tracking-wider">Mood & Catatan</span>
+                    <span class="text-xs font-semibold text-indigo-500 uppercase tracking-wider">Kondisi Mood Anda (Sheets)</span>
                     <div class="mt-2">
                         <p id="metaMood" class="text-sm font-bold text-indigo-950">-</p>
                         <p id="metaCatatan" class="text-xs text-indigo-600 mt-1 italic">-</p>
@@ -78,67 +77,70 @@
             <!-- Advice List -->
             <div>
                 <h2 class="text-xl font-bold text-slate-900 mb-6 flex items-center">
-                    <span class="w-2.5 h-6 bg-indigo-600 rounded-full mr-3"></span>
+                    <span class="w-2.5 h-6 bg-gradient-to-b from-indigo-600 to-purple-600 rounded-full mr-3"></span>
                     10 Pilar Analisis & Nasehat Harian
                 </h2>
-                <div id="adviceContainer" class="space-y-6">
-                    <!-- Kartu nasehat akan dirender di sini via JS -->
-                </div>
+                <div id="adviceContainer" class="space-y-6"></div>
             </div>
-        </div>
-
-        <!-- Empty State (First Load) -->
-        <div id="emptyState" class="text-center py-20 bg-white rounded-3xl border border-dashed border-slate-200">
-            <svg class="mx-auto h-12 w-12 text-slate-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M9.663 17h4.673M12 3v1m6.364 1.636l-.707.707M21 12h-1M4 12H3m3.343-5.657l-.707-.707m2.828 9.9a5 5 0 117.072 0l-.548.547A3.374 3.374 0 0014 18.469V19a2 2 0 11-4 0v-.531c0-.895-.356-1.754-.988-2.386l-.548-.547z" />
-            </svg>
-            <h3 class="mt-4 text-sm font-semibold text-slate-900">Belum ada data dimuat</h3>
-            <p class="mt-1 text-sm text-slate-500">Klik tombol di atas untuk mengambil analisis nasehat harian Anda dari Gemini AI.</p>
         </div>
     </div>
 
     <script>
-        // GANTI INI DENGAN URL WEB APP GOOGLE APPS SCRIPT ANDA
-        const WEB_APP_URL = "https://script.google.com/macros/s/AKfycbzUg2PbvCWboeldk3_cgcDDfMHP7BbtXVvPVzpbKMZkDwUCIdNVqXXX6Oj1KvkxnEIJvw/exec";
+        // MASUKKAN URL WEB APP GOOGLE APPS SCRIPT ANDA DI SINI
+        const WEB_APP_URL = "URL_WEB_APP_ANDA";
 
-        async function fetchNasehat() {
+        // Otomatis berjalan saat pertama kali halaman dibuka (Membaca Cache)
+        window.addEventListener('DOMContentLoaded', () => {
+            loadData(false); 
+        });
+
+        async function loadData(isForceRefresh) {
             const btn = document.getElementById('btnRefresh');
             const loader = document.getElementById('loader');
+            const loaderText = document.getElementById('loaderText');
             const content = document.getElementById('content');
-            const emptyState = document.getElementById('emptyState');
             const errorDiv = document.getElementById('errorMessage');
             const errorText = document.getElementById('errorText');
             const adviceContainer = document.getElementById('adviceContainer');
+            const txtSyncTime = document.getElementById('txtSyncTime');
 
-            // Setup UI states
+            // Setup UI State
             btn.disabled = true;
             btn.classList.add('opacity-50', 'cursor-not-allowed');
             loader.classList.remove('hidden');
-            content.classList.add('hidden');
-            emptyState.classList.add('hidden');
             errorDiv.classList.add('hidden');
-            adviceContainer.innerHTML = '';
+            
+            if(isForceRefresh) {
+                loaderText.innerText = "Menghubungkan langsung ke Gemini AI (Realtime Sync)... Silakan tunggu tawa Anda diracik.";
+            } else {
+                loaderText.innerText = "Membaca data nasehat dari penyimpanan cache Sheets...";
+            }
 
             try {
-                const response = await fetch(WEB_APP_URL);
+                // Tambahkan parameter ?refresh=true jika user memaksa realtime sync
+                const fetchUrl = isForceRefresh ? `${WEB_APP_URL}?refresh=true` : WEB_APP_URL;
+                
+                const response = await fetch(fetchUrl);
                 if (!response.ok) throw new Error(`HTTP error! status: ${response.status}`);
                 
                 const data = await response.json();
 
                 if (data.success) {
-                    // Update Metadata
-                    document.getElementById('metaJam').innerText = data.jamSekarang || '-';
-                    document.getElementById('metaKegiatan').innerText = data.kegiatanMestinya || '-';
-                    document.getElementById('metaMood').innerText = data.moodC10 || '-';
-                    document.getElementById('metaCatatan').innerText = data.moodA11 || '-';
+                    // Update Nilai Box Info
+                    document.getElementById('metaJam').innerText = data.jamSekarang + " WIB";
+                    document.getElementById('metaSync').innerText = data.jamSyncTerakhir + " WIB";
+                    document.getElementById('metaKegiatan').innerText = data.kegiatanMestinya;
+                    document.getElementById('metaMood').innerText = data.moodC10;
+                    document.getElementById('metaCatatan').innerText = data.moodA11;
+                    txtSyncTime.classList.remove('hidden');
 
-                    // Update Advice Cards
+                    // Bersihkan kontainer dan cetak kartu nasehat
+                    adviceContainer.innerHTML = '';
                     const nasehatList = Array.isArray(data.nasehat) ? data.nasehat : [data.nasehat];
                     
                     nasehatList.forEach((teks, index) => {
                         const card = document.createElement('div');
                         card.className = "bg-white p-6 md:p-8 rounded-2xl shadow-sm border border-slate-100 hover:shadow-md transition-shadow relative overflow-hidden group";
-                        
                         card.innerHTML = `
                             <div class="absolute top-0 left-0 w-1.5 h-full bg-gradient-to-b from-indigo-500 to-purple-500"></div>
                             <div class="flex items-start">
@@ -146,26 +148,22 @@
                                     ${String(index + 1).padStart(2, '0')}
                                 </div>
                                 <div class="flex-1">
-                                    <p class="text-slate-700 leading-relaxed text-justify text-sm md:text-base">
-                                        ${teks}
-                                    </p>
+                                    <p class="text-slate-700 leading-relaxed text-justify text-sm md:text-base">${teks}</p>
                                 </div>
                             </div>
                         `;
                         adviceContainer.appendChild(card);
                     });
 
-                    // Show content
                     content.classList.remove('hidden');
                 } else {
-                    throw new Error(data.error || "Gagal mendapatkan analisis.");
+                    throw new Error(data.error || "Gagal memproses data backend.");
                 }
 
             } catch (error) {
                 console.error(error);
                 errorText.innerText = error.message;
                 errorDiv.classList.remove('hidden');
-                emptyState.classList.remove('hidden');
             } finally {
                 btn.disabled = false;
                 btn.classList.remove('opacity-50', 'cursor-not-allowed');
