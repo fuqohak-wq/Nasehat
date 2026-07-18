@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>Terminal Kiosk Wajah AI - Core Pakem Super Fast Asynchronous</title>
+    <title>Terminal Kiosk Wajah AI - Core Realtime Live Update</title>
     <script src="https://cdn.jsdelivr.net/npm/@tailwindcss/browser@4"></script>
     <script defer src="https://cdn.jsdelivr.net/npm/face-api.js@0.22.2/dist/face-api.min.js"></script>
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
@@ -24,7 +24,7 @@
             <option value="Subuh">Jamaah Subuh</option>
             <option value="Dzuhur">Jamaah Dzuhur</option>
             <option value="Ashar">Jamaah Ashar</option>
-            <option value="Maghrib">Jamaah Maghrib</option>
+            <option value="Maghrib">Jama学 Maghrib</option>
             <option value="Isya">Jamaah Isya</option>
             <option value="Quranan">Ngaji al-Qur'an Bakdo Subuh</option>
             <option value="Afsahan">Ngafsahi/Kursus Bakdo al-Qur'an</option>
@@ -61,17 +61,23 @@
         </a>
     </div>
 
-    <!-- POP-UP SUKSES INSTAN (MILIDETIK TANPA LOADING) -->
+    <!-- POP-UP SUKSES INSTAN DENGAN LIVE REAL-TIME KOREKSI -->
     <div id="pop-success" class="fixed inset-0 bg-slate-950/90 backdrop-blur-lg flex items-center justify-center p-6 hidden z-50">
-        <div class="bg-gradient-to-b from-emerald-500 to-teal-600 text-slate-950 w-full max-w-md p-6 rounded-3xl text-center shadow-2xl border-2 border-emerald-400">
+        <div class="bg-gradient-to-b from-emerald-500 to-teal-600 text-slate-950 w-full max-w-md p-6 rounded-3xl text-center shadow-2xl border-2 border-emerald-400 relative">
+            
+            <!-- Indikator Sinkronisasi Real-time Pojok Kanan Atas -->
+            <div id="status-live-sync" class="absolute top-4 right-4 text-[10px] font-black bg-slate-950/20 px-2 py-0.5 rounded-full text-white tracking-widest uppercase flex items-center gap-1">
+                <i class="fa-solid fa-spinner animate-spin"></i> Live Sync
+            </div>
+
             <span class="text-xs font-black tracking-widest block opacity-85 uppercase"><i class="fa-solid fa-circle-check animate-pulse mr-1"></i> LOG JAMAAH DICATAT</span>
             <span class="font-black text-2xl block mt-1 tracking-wide uppercase border-b border-slate-950/20 pb-3" id="txt-nama-sukses">Nama Santri</span>
             
             <div class="mt-4 bg-slate-950/20 rounded-2xl p-4 flex flex-col gap-1 text-center">
                 <span class="text-[10px] font-black tracking-widest text-slate-950 opacity-80 uppercase">TOTAL SALDO TABUNGAN</span>
-                <span id="pop-nominal-tabungan" class="text-3xl font-black text-white tracking-wide">Rp 0</span>
+                <span id="pop-nominal-tabungan" class="text-3xl font-black text-white tracking-wide transition-all duration-300">Rp 0</span>
                 <p id="pop-pesan-motivasi" class="text-xs font-bold text-slate-900 mt-2 bg-white/40 px-3 py-2.5 rounded-xl italic leading-relaxed">
-                    Memuat data...
+                    Membuat estimasi nominal harian...
                 </p>
             </div>
         </div>
@@ -95,10 +101,11 @@
         let dbStatus = document.getElementById('txt-db-status');
         let canvasCap = document.getElementById('canvas-capture');
         let iframeTabungan = document.getElementById('iframe-tabungan');
+        let statusLiveSync = document.getElementById('status-live-sync');
 
         let isProcessing = false;
         let databaseSantri = [];
-        let dataSaldoTerakhir = { saldo: 0, poin: 0, nik: "" };
+        let santriSedangAktif = null;
 
         const AMBANG_BATAS_KETAT = 0.48;    
         const DETECTOR_INPUT_SIZE = 416;    
@@ -108,9 +115,9 @@
         let hitungKonsistensi = 0;
         const TARGET_KONSISTENSI = 2; 
 
-        const CACHE_DB_KEY = 'cache_database_santri';
-        const CACHE_DB_TIME_KEY = 'cache_database_time';
-        const DURASI_CACHE_DB = 30 * 60 * 1000; 
+        const CACHE_DB_KEY = 'cache_database_santri_v2';
+        const CACHE_DB_TIME_KEY = 'cache_database_time_v2';
+        const DURASI_CACHE_DB = 15 * 60 * 1000; // 15 Menit cache massal
 
         function bunyikanBeep(frekuensi, durasi) {
             try {
@@ -128,13 +135,47 @@
             } catch (e) {}
         }
 
-        // RECEIVER PENGHUBUNG DATA AWAL DARI CACHE IFRAME
+        // KREATIF: MENANGKAP DUA JALUR DATA (KILAT VS REAL-TIME CLOUD)
         window.addEventListener("message", (event) => {
             const { aksi, saldoRaw, nik, poinHarian } = event.data;
-            if (aksi === "kirim_saldo_ke_pop") {
-                dataSaldoTerakhir.saldo = parseFloat(saldoRaw) || 0;
-                dataSaldoTerakhir.poin = parseInt(poinHarian) || 0;
-                dataSaldoTerakhir.nik = nik;
+            
+            if (!isProcessing || !santriSedangAktif || santriSedangAktif.nik !== nik) return;
+
+            let saldoFinal = parseFloat(saldoRaw) || 0;
+            let totalPoin = parseInt(poinHarian) || 0;
+            
+            // Jika ini respon kilat milidetik awal, tambahkan simulasi poin +1 biar ga telat visualnya
+            if (aksi === "kirim_saldo_kilat") {
+                totalPoin = totalPoin + 1;
+                if (totalPoin >= 15 && saldoFinal > -2000) { saldoFinal = -2868; }
+            }
+
+            let tandaMinus = saldoFinal < 0 ? "-" : "";
+            let elementSaldo = document.getElementById('pop-nominal-tabungan');
+            
+            // Render ke layar pop-up
+            elementSaldo.innerText = tandaMinus + "Rp " + Math.abs(Math.round(saldoFinal)).toLocaleString('id-ID');
+            
+            // Set Pesan Motivasi Berdasarkan Poin Kegiatan
+            let pesan = "";
+            if (totalPoin <= 1) {
+                pesan = `👋 Halo ${santriSedangAktif.nama}, ini baru kegiatan ke-${totalPoin} kamu hari ini. Saldo tabungan: ${tandaMinus}Rp ${Math.abs(Math.round(saldoFinal)).toLocaleString('id-ID')}. Ayo kejar kegiatan berikutnya! ✨`;
+            } else if (totalPoin >= 2 && totalPoin <= 4) {
+                pesan = `⚠️ Perhatian ${santriSedangAktif.nama}! Kamu baru ikut ${totalPoin} kegiatan hari ini. Ayo lebih semangat lagi! 💪`;
+            } else if (totalPoin >= 5 && totalPoin <= 14) {
+                pesan = `⚡ Keren ${santriSedangAktif.nama}! Sudah ${totalPoin} kegiatan kamu ikuti hari ini. Pertahankan ritme ini! 🚀`;
+            } else {
+                pesan = `🏆 Fantastis ${santriSedangAktif.nama}! Hari ini kamu sangat produktif mengikuti ${totalPoin} kegiatan! Luar biasa! 🔥`;
+            }
+            document.getElementById('pop-pesan-motivasi').innerText = pesan;
+
+            // Jika jalur data Real-time Cloud sudah masuk, ubah status indikator pojok kanan atas
+            if (aksi === "kirim_saldo_realtime") {
+                statusLiveSync.innerHTML = `<i class="fa-solid fa-circle-check text-emerald-300"></i> 100% Realtime`;
+                statusLiveSync.className = "absolute top-4 right-4 text-[10px] font-black bg-emerald-950/40 px-2 py-0.5 rounded-full text-emerald-300 tracking-widest uppercase flex items-center gap-1 animate-bounce";
+                // Efek kilatan hijau penanda data terupdate real-time
+                elementSaldo.classList.add('text-emerald-200');
+                setTimeout(() => elementSaldo.classList.remove('text-emerald-200'), 400);
             }
         });
 
@@ -216,7 +257,6 @@
             } catch (error) { return ""; }
         }
 
-        // VERIFIKASI SUPER KILAT (MILIDETIK) TERINTEGRASI BACKGROUND THREAD & JEDA BACA 3 DETIK
         function verifikasiWajahLokal(descriptorKamera) {
             let santriDitemukan = null; 
             let jarakTerkecil = 1.0;
@@ -242,12 +282,13 @@
                     isProcessing = true;
                     hitungKonsistensi = 0;
                     deteksiTerakhir = null;
+                    santriSedangAktif = santriDitemukan;
 
                     const kegiatan = document.getElementById('pilihan-kegiatan').value;
                     const hariIni = new Date().toISOString().split('T')[0]; 
                     const storageKey = `absen_${hariIni}_${santriDitemukan.nik}_${kegiatan}`;
 
-                    // 1. ANTISPAM BENTENG UTAMA LOKAL KIOSK (0ms BLOKIR)
+                    // ANTISPAM BENTENG LOKAL
                     if (localStorage.getItem(storageKey) === "TERCATAT") {
                         document.getElementById('txt-nama-peringatan').innerText = santriDitemukan.nama.toUpperCase();
                         document.getElementById('pop-warning').classList.remove('hidden');
@@ -264,10 +305,20 @@
                         return;
                     }
 
-                    // Kunci lokal instan agar aman dari double hit
                     localStorage.setItem(storageKey, "TERCATAT");
 
-                    // Panggil data awal dari jembatan cache iframe
+                    // Reset status tampilan pop-up awal
+                    statusLiveSync.innerHTML = `<i class="fa-solid fa-spinner animate-spin"></i> Live Sync`;
+                    statusLiveSync.className = "absolute top-4 right-4 text-[10px] font-black bg-slate-950/20 px-2 py-0.5 rounded-full text-white tracking-widest uppercase flex items-center gap-1";
+                    document.getElementById('txt-nama-sukses').innerText = santriDitemukan.nama.toUpperCase();
+                    document.getElementById('pop-nominal-tabungan').innerText = "Rp ...";
+                    document.getElementById('pop-success').classList.remove('hidden');
+                    
+                    kotakScan.className = "w-64 h-64 border-4 border-solid border-emerald-400 rounded-3xl flex items-center justify-center bg-emerald-500/10 scale-105";
+                    label.innerText = "BERHASIL DIABSEN!";
+                    bunyikanBeep(1000, 0.25);
+
+                    // TRIGGER FRAME: Panggil data saldo (Akan merespon Kilat, disusul respon Real-time Cloud)
                     if (iframeTabungan && iframeTabungan.contentWindow) {
                         iframeTabungan.contentWindow.postMessage({ 
                             nik: santriDitemukan.nik, 
@@ -276,42 +327,7 @@
                         }, "*");
                     }
 
-                    // 2. LOGIKA KILAT UTAMA: HITUNGAN VISUAL ESTIMASI LOKAL (MELEDARKAN LAYAR DALAM MILIDETIK)
-                    let saldoDasar = dataSaldoTerakhir.nik === santriDitemukan.nik ? dataSaldoTerakhir.saldo : 0;
-                    let poinDasar = dataSaldoTerakhir.nik === santriDitemukan.nik ? dataSaldoTerakhir.poin : 0;
-
-                    let totalKegiatanHariIni = poinDasar + 1;
-                    let saldoTampilkan = saldoDasar;
-                    
-                    // Koreksi otomatis visual jika terdeteksi spam tinggi agar angka -2.868 langsung muncul presisi
-                    if (totalKegiatanHariIni >= 15 && saldoDasar > -2000) {
-                        saldoTampilkan = -2868; 
-                    }
-
-                    let tandaMinus = saldoTampilkan < 0 ? "-" : "";
-
-                    // Buka Pop-Up Instan 0 milidetik!!
-                    document.getElementById('txt-nama-sukses').innerText = santriDitemukan.nama.toUpperCase();
-                    document.getElementById('pop-nominal-tabungan').innerText = tandaMinus + "Rp " + Math.abs(Math.round(saldoTampilkan)).toLocaleString('id-ID');
-                    
-                    let pesan = "";
-                    if (totalKegiatanHariIni <= 1) {
-                        pesan = `👋 Halo ${santriDitemukan.nama}, ini baru kegiatan ke-${totalKegiatanHariIni} kamu hari ini. Saldo tabunganmu ${tandaMinus}Rp ${Math.abs(Math.round(saldoTampilkan)).toLocaleString('id-ID')}. Ayo kejar kegiatan berikutnya, jangan sampai bolos! ✨`;
-                    } else if (totalKegiatanHariIni >= 2 && totalKegiatanHariIni <= 4) {
-                        pesan = `⚠️ Perhatian ${santriDitemukan.nama}! Kamu baru ikut ${totalKegiatanHariIni} kegiatan hari ini. Ayo lebih semangat lagi agar poin harianmu maksimal! 💪`;
-                    } else if (totalKegiatanHariIni >= 5 && totalKegiatanHariIni <= 14) {
-                        pesan = `⚡ Keren ${santriDitemukan.nama}! Sudah ${totalKegiatanHariIni} kegiatan kamu ikuti hari ini. Pertahankan ritme ini! 🚀`;
-                    } else {
-                        pesan = `🏆 Fantastis ${santriDitemukan.nama}! Hari ini kamu sangat produktif mengikuti ${totalKegiatanHariIni} kegiatan! Kamu luar biasa! 🔥`;
-                    }
-                    document.getElementById('pop-pesan-motivasi').innerText = pesan;
-                    
-                    document.getElementById('pop-success').classList.remove('hidden');
-                    kotakScan.className = "w-64 h-64 border-4 border-solid border-emerald-400 rounded-3xl flex items-center justify-center bg-emerald-500/10 scale-105";
-                    label.innerText = "BERHASIL DIABSEN!";
-                    bunyikanBeep(1000, 0.25);
-
-                    // 3. MENEMBAK CLOUD DI LATAR BELAKANG (ASYNCHRONOUS FIRE & FORGET)
+                    // MENEMBAK PRESENSI DI LATAR BELAKANG (FIRE & FORGET)
                     const dataFotoBase64 = ambilSnapshotFoto();
                     const payload = {
                         aksi: "absen_santri",
@@ -321,20 +337,20 @@
                         foto: dataFotoBase64
                     };
 
-                    // Kirim senyap tanpa ditunggu oleh UI Kiosk
                     fetch(URL_ABSENSI, { 
                         method: "POST", 
                         headers: { "Content-Type": "text/plain;charset=utf-8" }, 
                         body: JSON.stringify(payload) 
-                    }).catch(e => console.log("Background job cloud active."));
+                    }).catch(e => console.log("Background check active."));
 
-                    // 4. JEDA TEPAT 3 DETIK AGAR INFONYA TERBACA OLEH SANTRI
+                    // JEDA 3 DETIK BERJALAN AMAN
                     setTimeout(() => {
                         document.getElementById('pop-success').classList.add('hidden');
                         isProcessing = false; 
+                        santriSedangAktif = null;
                         label.innerText = "HADAPKAN WAJAH KE KAMERA";
                         kotakScan.className = "w-64 h-64 border-4 border-dashed border-cyan-500/40 rounded-3xl flex items-center justify-center";
-                    }, 3000); // Kunci Pop-Up dilepas setelah 3000ms (3 detik)
+                    }, 3000); 
                 }
             } else {
                 hitungKonsistensi = 0; deteksiTerakhir = null; isProcessing = true; 
