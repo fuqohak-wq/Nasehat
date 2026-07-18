@@ -127,40 +127,34 @@
         }
 
         // RESPON POPUP BERDASARKAN TOTAL DATA KEHADIRAN HARIAN TERPUSAT CLOUD
-        window.addEventListener("message", (event) => {
-            const { aksi, saldoRaw, nama, nik } = event.data;
-            if (aksi === "kirim_saldo_ke_pop") {
-                let saldo = parseFloat(saldoRaw) || 0;
-                
-                let tandaMinus = saldo < 0 ? "-" : "";
-                document.getElementById('pop-nominal-tabungan').innerText = tandaMinus + "Rp " + Math.abs(Math.round(saldo)).toLocaleString('id-ID');
+// MENDENGARKAN RESPON DARI TABUNGAN.HTML (BERBASIS DATA KOLOM K GOOGLE SHEET)
+window.addEventListener("message", (event) => {
+    const { aksi, saldoRaw, nama, poinHarian } = event.data;
+    if (aksi === "kirim_saldo_ke_pop") {
+        let saldo = parseFloat(saldoRaw) || 0;
+        
+        // 1. Format Tampilan Saldo Akumulasi di Pop-up
+        let tandaMinus = saldo < 0 ? "-" : "";
+        document.getElementById('pop-nominal-tabungan').innerText = tandaMinus + "Rp " + Math.abs(Math.round(saldo)).toLocaleString('id-ID');
 
-                // Baca data riwayat harian terpusat dari cache database cloud
-                let totalKegiatanHari Ini = 0;
-                let NIK_Target = nik ? nik.toString().trim() : "";
-                let profilSantri = databaseSantri.find(s => s.nik && s.nik.toString().trim() === NIK_Target);
-                
-                if (profilSantri && profilSantri.kegiatan_hari_ini !== undefined) {
-                    totalKegiatanHariIni = parseInt(profilSantri.kegiatan_hari_ini) + 1; // Ditambah 1 untuk scan sukses saat ini
-                } else {
-                    totalKegiatanHariIni = 1;
-                }
+        // 2. Baca Jumlah Kegiatan Hari Ini Dari Kolom K (Ditambah 1 karena log scan detik ini belum masuk hitungan spreadsheet)
+        let totalKegiatanHariIni = (parseInt(poinHarian) || 0) + 1;
 
-                let pesan = "";
-                if (totalKegiatanHariIni <= 1) {
-                    pesan = `👋 Halo ${nama}, ini baru kegiatan ke-${totalKegiatanHariIni} kamu hari ini. Ayo lebih disiplin lagi ikuti semua kegiatan untuk kumpulkan poin! ✨`;
-                } else if (totalKegiatanHariIni >= 2 && totalKegiatanHariIni <= 4) {
-                    pesan = `⚠️ Ayo ${nama}! Kamu baru ikut ${totalKegiatanHariIni} kegiatan hari ini. Masih ada sisa kegiatan lain, jangan malas ke masjid & kelas ya! 💪`;
-                } else if (totalKegiatanHariIni >= 5 && totalKegiatanHariIni <= 7) {
-                    pesan = `⚡ Keren ${nama}! Sudah ${totalKegiatanHariIni} kegiatan kamu ikuti hari ini. Pertahankan ritme ini sampai malam nanti ya! 🚀`;
-                } else {
-                    pesan = `🏆 Luar Biasa ${nama}! Hari ini kamu sangat produktif dengan mengikuti ${totalKegiatanHariIni} kegiatan! Kamu teladan nyata hari ini! 🔥`;
-                }
-                
-                document.getElementById('pop-pesan-motivasi').innerText = pesan;
-            }
-        });
-
+        // 3. LOGIKA STIMULAN MOTIVASI BERDASARKAN PROGRES HARIAN KOLOM K
+        let pesan = "";
+        if (totalKegiatanHariIni <= 1) {
+            pesan = `👋 Halo ${nama}, ini baru kegiatan ke-${totalKegiatanHariIni} kamu hari ini. Saldo tabunganmu ${tandaMinus}Rp ${Math.abs(Math.round(saldo)).toLocaleString('id-ID')}. Ayo kejar kegiatan berikutnya, jangan sampai bolos! ✨`;
+        } else if (totalKegiatanHariIni >= 2 && totalKegiatanHariIni <= 4) {
+            pesan = `⚠️ Perhatian ${nama}! Kamu baru ikut ${totalKegiatanHariIni} kegiatan hari ini. Masih ada sisa kegiatan lain, ayo lebih semangat lagi ke masjid dan kelas agar poin harianmu maksimal! 💪`;
+        } else if (totalKegiatanHariIni >= 5 && totalKegiatanHariIni <= 7) {
+            pesan = `⚡ Keren ${nama}! Sudah ${totalKegiatanHariIni} kegiatan kamu ikuti hari ini. Pertahankan ritme ini sampai malam nanti ya! 🚀`;
+        } else {
+            pesan = `🏆 Fantastis ${nama}! Hari ini kamu sangat produktif dengan mengikuti ${totalKegiatanHariIni} kegiatan! Kamu teladan nyata hari ini, pertahankan! 🔥`;
+        }
+        
+        document.getElementById('pop-pesan-motivasi').innerText = pesan;
+    }
+});
         async function ambilDatabaseSantri(paksaSinkron = false) {
             const cachedDb = localStorage.getItem(CACHE_DB_KEY);
             const cachedTime = localStorage.getItem(CACHE_DB_TIME_KEY);
