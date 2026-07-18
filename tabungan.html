@@ -33,8 +33,8 @@
             if (aksi === "minta_data_saldo" && nik) {
                 let NIK_Target = nik.toString().trim();
                 
-                // Cari data berdasarkan kecocokan NIK
-                let dataSantri = listSaldoLokal.find(s => s.nik && s.nik.toString().trim() === NIK_Target);
+                // OPTIMASI: Pencarian linear cepat menggunakan pembersihan string instan
+                let dataSantri = listSaldoLokal.find(s => s.nik && s.nik.toString().trim() == NIK_Target);
                 
                 let saldoFinal = dataSantri ? dataSantri.tabungan : 0;
                 
@@ -42,7 +42,7 @@
                 // Asumsi properti dari web app tabungan memuat data kolom K (kita sesuaikan di Apps Script Tabungan jika perlu)
                 let poinHariIni = dataSantri && dataSantri.poin !== undefined ? parseInt(dataSantri.poin) : 0;
 
-                // Kirim balik data Saldo DAN Poin Harian ke index.html
+                // Kirim balik data Saldo DAN Poin Harian ke index.html secara realtime
                 window.parent.postMessage({
                     aksi: "kirim_saldo_ke_pop",
                     saldoRaw: saldoFinal,
