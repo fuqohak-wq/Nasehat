@@ -64,12 +64,9 @@
 
     <!-- KUMPULAN TOMBOL NAVIGASI DILUAR MODAL -->
     <div class="w-full max-w-md mx-auto flex flex-col gap-2 mt-4">
-        <!-- Tombol Khusus untuk Orang Tua (Menuju orangtua.html di repo yang sama) -->
         <a href="orangtua.html" class="w-full bg-rose-950 border border-rose-800 text-rose-300 font-black py-3.5 rounded-2xl text-xs uppercase text-center block tracking-wider shadow-md hover:bg-rose-900 transition-colors">
             <i class="fa-solid fa-heart animate-pulse mr-1"></i> Mode Orang Tua - Cek Foto Anak
         </a>
-        
-        <!-- Tombol Dashboard Bawaan Kiosk -->
         <a href="dashboard.html" class="w-full bg-slate-900 text-slate-400 font-bold py-3.5 rounded-2xl text-xs uppercase text-center block tracking-wider">
             Kembali ke Dashboard
         </a>
@@ -90,8 +87,8 @@
         </div>
     </div>
 
-<script>
-        // 1. Inisialisasi Kedua URL Web App secara Terpisah
+    <script>
+        // Inisialisasi Kedua URL Web App secara Terpisah
         const API_URL = "https://script.google.com/macros/s/AKfycbxJ8zjyd5YLsPhpq52ntO95-Bn5gNJlKLHSozMZ1kWFJAOGir5co21ln3gpiVI9UCx2/exec";
         const API_TABUNGAN_URL = "https://script.google.com/macros/s/AKfycbxVH7-d8GrgHjaDeT15az9zsHvwVedApP2IKBXl8ObIfexlmJG_-qCveSfmh7SL5cuX/exec";
 
@@ -101,7 +98,6 @@
         let dbStatus = document.getElementById('txt-db-status');
         let canvasCap = document.getElementById('canvas-capture');
         
-        // Target Element Widget Tabungan
         let widgetTabungan = document.getElementById('widget-tabungan-santri');
         let lblNamaTabungan = document.getElementById('label-nama-tabungan');
         let lblNikTabungan = document.getElementById('label-nik-tabungan');
@@ -109,7 +105,7 @@
 
         let isProcessing = false;
         let databaseSantri = [];
-        let cacheSaldoTabungan = {}; // Penyimpanan RAM Lokal
+        let cacheSaldoTabungan = {}; 
 
         const AMBANG_BATAS_KETAT = 0.48;    
         const DETECTOR_INPUT_SIZE = 416;    
@@ -124,7 +120,6 @@
         const CACHE_DB_TIME_KEY = 'cache_database_time';
         const DURASI_CACHE_DB = 6 * 60 * 60 * 1000; 
 
-        // Fungsi utility pembantu untuk format mata uang rupiah standar
         function formatRupiah(angka) {
             if (angka === undefined || angka === null || isNaN(angka)) return "Rp 0";
             return "Rp " + parseInt(angka).toLocaleString('id-ID');
@@ -151,9 +146,8 @@
             const cachedTime = localStorage.getItem(CACHE_DB_TIME_KEY);
 
             if (!paksaSinkron && cachedDb && cachedTime && (Date.now() - cachedTime < DURASI_CACHE_DB)) {
-                console.log("Menggunakan database santri dari Local Storage (Instan)...");
                 databaseSantri = JSON.parse(cachedDb);
-                dbStatus.innerText = `🟢 Kiosk Ready (Cache: ${databaseSantri.length} Santri)`;
+                dbStatus.innerText = `🟢 Kiosk Ready (Lokal: ${databaseSantri.length} Santri)`;
                 dbStatus.classList.remove('animate-pulse');
                 muatSaldoKeMemoriLokal();
                 return;
@@ -170,26 +164,21 @@
                     databaseSantri = json.data;
                     localStorage.setItem(CACHE_DB_KEY, JSON.stringify(databaseSantri));
                     localStorage.setItem(CACHE_DB_TIME_KEY, Date.now().toString());
-                    
                     dbStatus.innerText = `🟢 Cloud Kiosk Ready (${databaseSantri.length} Santri)`;
                     dbStatus.classList.remove('animate-pulse');
-                } else {
-                    throw new Error("Respon server gagal");
                 }
                 await muatSaldoKeMemoriLokal();
             } catch (error) {
                 console.error("Gagal menyinkronkan database dari cloud:", error);
                 if (cachedDb) {
                     databaseSantri = JSON.parse(cachedDb);
-                    dbStatus.innerText = `⚠️ Cloud Offline (Memakai Data Lokal)`;
+                    dbStatus.innerText = `⚠️ Cloud Offline`;
                     dbStatus.classList.remove('animate-pulse');
-                } else {
-                    dbStatus.innerText = "🔴 Cloud Putus & Cache Kosong";
                 }
             }
         }
 
-        // Memuat database saldo tabungan ke RAM untuk pencarian berkecepatan tinggi
+        // Sinkronisasi data saldo ke memori RAM saat startup
         async function muatSaldoKeMemoriLokal() {
             try {
                 const res = await fetch(`${API_TABUNGAN_URL}?aksi=ambil_database`, { method: "GET" });
@@ -197,13 +186,12 @@
                 if (json.status === "success" && Array.isArray(json.data)) {
                     cacheSaldoTabungan = {};
                     json.data.forEach(s => {
-                        if (s.nik) {
-                            // Ekstraksi nilai saldo fleksibel dari properti objek
+                        if(s.nik) {
                             let nilai = s.tabungan !== undefined ? s.tabungan : (s.saldo !== undefined ? s.saldo : 0);
                             cacheSaldoTabungan[s.nik.toString().trim()] = nilai;
                         }
                     });
-                    console.log("Database saldo tabungan berhasil disinkronkan ke memori lokal.");
+                    console.log("Database saldo tabungan berhasil dimuat ke memori lokal.");
                 }
             } catch (e) {
                 console.error("Gagal memuat saldo tabungan:", e);
@@ -245,7 +233,7 @@
 
         function ambilSnapshotFoto() {
             try {
-                // Optimalisasi Resolusi Foto Kiosk ke 320x320 agar penulisan log harian secepat kilat
+                // Skala kompresi 320x320 agar penulisan baris data ke cloud cepat tanpa lag
                 canvasCap.width = 320;
                 canvasCap.height = 320;
                 const ctx = canvasCap.getContext('2d');
@@ -254,7 +242,6 @@
                 ctx.drawImage(video, 0, 0, canvasCap.width, canvasCap.height);
                 return canvasCap.toDataURL('image/jpeg', 0.35);
             } catch (error) {
-                console.error("Gagal mengambil foto:", error);
                 return "";
             }
         }
@@ -277,7 +264,6 @@
                     
                     let dataVektorArr = JSON.parse(dataVektorRaw);
                     let arrayVektorDb = Array.isArray(dataVektorArr) ? dataVektorArr : Object.values(dataVektorArr);
-                    
                     if(arrayVektorDb.length !== 128) continue; 
 
                     let jarakSains = faceapi.euclideanDistance(descriptorKamera, arrayVektorDb);
@@ -308,7 +294,7 @@
                     const hariIni = new Date().toISOString().split('T')[0]; 
                     const storageKey = `absen_${hariIni}_${nikBersih}_${kegiatan}`;
 
-                    // PROTEKSI ABSENSI GANDA: Dipasang paling atas sebelum request cloud
+                    // PENGUNCIAN DAN PROTEKSI DUA ABSENSI GANDA DI BARIS TERDEPAN
                     if (localStorage.getItem(storageKey)) {
                         document.getElementById('txt-nama-peringatan').innerText = santriDitemukan.nama.toUpperCase();
                         document.getElementById('pop-warning').classList.remove('hidden');
@@ -327,16 +313,14 @@
                         return;
                     }
 
-                    // TAMPILKAN WIDGET DAN DATA IDENTITAS
+                    // PENAMPILAN SALDO DARI RAM LOKAL + FALLBACK CADANGAN OTOMATIS
                     lblNamaTabungan.innerText = santriDitemukan.nama ? santriDitemukan.nama.toUpperCase() : "NAMA SANTRI";
                     lblNikTabungan.innerText = santriDitemukan.nik || "-";
                     
-                    // VALIDASI DAN FALLBACK CADANGAN SALDO
                     if (cacheSaldoTabungan[nikBersih] !== undefined) {
                         lblNominalTabungan.innerText = formatRupiah(cacheSaldoTabungan[nikBersih]);
                         widgetTabungan.classList.remove('hidden');
                     } else {
-                        // Jalur Cadangan: Jika cache RAM kosong, ambil langsung dari URL Kedua secara realtime
                         lblNominalTabungan.innerText = "Memuat...";
                         widgetTabungan.classList.remove('hidden');
                         fetch(`${API_TABUNGAN_URL}?aksi=ambil_database`)
@@ -347,10 +331,8 @@
                                     if (cocok) {
                                         let val = cocok.tabungan !== undefined ? cocok.tabungan : (cocok.saldo !== undefined ? cocok.saldo : 0);
                                         lblNominalTabungan.innerText = formatRupiah(val);
-                                        cacheSaldoTabungan[nikBersih] = val; // masukkan ke RAM untuk scan berikutnya
-                                    } else {
-                                        lblNominalTabungan.innerText = "Rp 0";
-                                    }
+                                        cacheSaldoTabungan[nikBersih] = val;
+                                    } else { lblNominalTabungan.innerText = "Rp 0"; }
                                 }
                             }).catch(() => { lblNominalTabungan.innerText = "Rp 0"; });
                     }
@@ -358,7 +340,7 @@
                     kotakScan.className = "w-64 h-64 border-4 border-solid border-emerald-400 rounded-3xl flex items-center justify-center bg-emerald-500/10 scale-105";
                     label.innerText = "MENCOCOKKAN BIOMETRIK...";
 
-                    // Kunci status lokal segera
+                    // Langsung tandai status lokal agar aman dari ketukan berulang
                     localStorage.setItem(storageKey, "TERCATAT");
 
                     const dataFotoBase64 = ambilSnapshotFoto();
@@ -374,16 +356,14 @@
                     document.getElementById('pop-success').classList.remove('hidden');
                     bunyikanBeep(1000, 0.25);
 
-                    // PENGIRIMAN DATA ASINKRONUS (BACKGROUND THREAD) AGAR KIOSK TIDAK LEMOT ATAU MACET
+                    // Kirim ke database utama menggunakan background process agar UI tetap responsif
                     fetch(API_URL, { 
                         method: "POST", 
                         headers: { "Content-Type": "text/plain;charset=utf-8" }, 
                         body: JSON.stringify(payload) 
                     }).then(res => res.json())
                       .then(r => {
-                          if(r.status !== "success") {
-                              localStorage.removeItem(storageKey); // Batalkan penguncian jika server menolak
-                          }
+                          if(r.status !== "success") { localStorage.removeItem(storageKey); }
                       })
                       .catch(e => console.error("Koneksi cloud tertunda:", e));
                     
