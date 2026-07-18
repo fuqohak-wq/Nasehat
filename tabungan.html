@@ -6,30 +6,24 @@
 </head>
 <body class="bg-transparent overflow-hidden text-slate-100">
 
-    <div id="widget-tabungan" class="hidden w-full bg-slate-950/80 border border-cyan-500/30 rounded-xl p-3 flex justify-between items-center bg-gradient-to-r from-slate-950 to-cyan-950/20">
-        <div class="flex flex-col gap-0.5">
-            <span id="label-nama" class="text-[11px] font-black tracking-wide text-white uppercase line-clamp-1">NAMA SANTRI</span>
-            <span class="text-[9px] font-bold text-slate-400 tracking-wider">SALDO TABUNGAN</span>
-        </div>
-        <div class="text-right flex flex-col justify-center">
-            <span id="label-nominal" class="text-base font-black text-emerald-400 tracking-wide">Rp 0</span>
-        </div>
-    </div>
-
     <script>
+        // Gunakan URL Web App Tabungan Anda
         const API_TABUNGAN = "https://script.google.com/macros/s/AKfycbxVH7-d8GrgHjaDeT15az9zsHvwVedApP2IKBXl8ObIfexlmJG_-qCveSfmh7SL5cuX/exec";
         let listSaldoLokal = [];
 
         async function unduhSemuaSaldo() {
             try {
+                // Panggil endpoint Apps Script Tabungan
                 const res = await fetch(`${API_TABUNGAN}?aksi=ambil_database`, { method: "GET" });
                 const json = await res.json();
+                
                 if (json.status === "success") {
+                    // Simpan response database saldo ke memori lokal iframe
                     listSaldoLokal = json.data;
-                    console.log("Widget Tabungan: Berhasil sinkronisasi " + listSaldoLokal.length + " data saldo.");
+                    console.log("Widget Tabungan: Berhasil sinkronisasi " + listSaldoLokal.length + " data.");
                 }
             } catch (e) {
-                console.error("Widget Tabungan: Gagal memuat data dari cloud", e);
+                console.error("Widget Tabungan: Gagal memuat data", e);
             }
         }
 
@@ -38,22 +32,30 @@
 
             if (aksi === "minta_data_saldo" && nik) {
                 let NIK_Target = nik.toString().trim();
+                
+                // Cari data berdasarkan kecocokan NIK
                 let dataSantri = listSaldoLokal.find(s => s.nik && s.nik.toString().trim() === NIK_Target);
+                
                 let saldoFinal = dataSantri ? dataSantri.tabungan : 0;
+                
+                // PENTING: Jika data poin di kolom K tersedia di server tabungan, ambil nilainya
+                // Asumsi properti dari web app tabungan memuat data kolom K (kita sesuaikan di Apps Script Tabungan jika perlu)
+                let poinHariIni = dataSantri && dataSantri.poin !== undefined ? parseInt(dataSantri.poin) : 0;
 
-                // Balikkan data saldo beserta NIK ke index.html untuk Pop-Up
+                // Kirim balik data Saldo DAN Poin Harian ke index.html
                 window.parent.postMessage({
                     aksi: "kirim_saldo_ke_pop",
                     saldoRaw: saldoFinal,
                     nama: nama,
-                    nik: NIK_Target
+                    nik: NIK_Target,
+                    poinHarian: poinHariIni
                 }, "*");
             }
         });
 
         unduhSemuaSaldo();
-        // Auto refresh data saldo dari cloud setiap 10 menit
-        setInterval(unduhSemuaSaldo, 10 * 60 * 1000);
+        // Sinkronisasi data saldo dan poin setiap 5 menit
+        setInterval(unduhSemuaSaldo, 5 * 60 * 1000);
     </script>
 </body>
 </html>
