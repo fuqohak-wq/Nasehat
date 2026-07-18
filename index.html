@@ -2,172 +2,315 @@
 <html lang="id">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Nasehat Harian Mas Fuqohak</title>
-    <!-- Tailwind CSS -->
-    <script src="https://cdn.tailwindcss.com"></script>
-    <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@300;400;500;600;700&display=swap" rel="stylesheet">
-    <style>
-        body { font-family: 'Plus Jakarta Sans', sans-serif; }
-    </style>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>Terminal Kiosk Wajah AI - Core Pakem Standar Industri</title>
+    <script src="https://cdn.jsdelivr.net/npm/@tailwindcss/browser@4"></script>
+    <script defer src="https://cdn.jsdelivr.net/npm/face-api.js@0.22.2/dist/face-api.min.js"></script>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
 </head>
-<body class="bg-slate-50 text-slate-800 min-h-screen">
+<body class="bg-slate-950 text-slate-100 min-h-screen flex flex-col justify-between p-4">
 
-    <div class="max-w-4xl mx-auto px-4 py-8">
-        <!-- Header -->
-        <header class="text-center mb-10">
-            <h1 class="text-3xl font-extrabold text-slate-900 tracking-tight sm:text-4xl">
-                Nasehat & Analisis Harian 💡
-            </h1>
-            <p class="mt-2 text-lg text-slate-600">
-                Wawasan segar kolaborasi Humor, Filsafat, Agama, dan Neurosains khusus Mas Fuqohak
-            </p>
-            
-            <div class="mt-6">
-                <button id="btnRefresh" onclick="loadData(true)" class="px-6 py-3 bg-gradient-to-r from-indigo-600 to-purple-600 hover:from-indigo-700 hover:to-purple-700 active:scale-95 transition-all text-white font-medium rounded-full shadow-md hover:shadow-lg focus:outline-none">
-                    🔄 Ambil Nasehat Baru (Realtime Sync AI)
-                </button>
-            </div>
-            
-            <!-- Petunjuk Waktu Sync -->
-            <p id="txtSyncTime" class="text-xs text-slate-400 mt-3 italic hidden">
-                Nasehat ini terakhir diperbarui dari Gemini AI pada pukul: <span id="metaSync" class="font-bold text-indigo-600">-</span>
-            </p>
-        </header>
-
-        <!-- Loader -->
-        <div id="loader" class="hidden my-20 text-center">
-            <div class="inline-block animate-spin rounded-full h-12 w-12 border-t-2 border-b-2 border-indigo-600"></div>
-            <p id="loaderText" class="mt-4 text-slate-500 font-medium animate-pulse">Memuat data...</p>
+    <div class="w-full max-w-md mx-auto bg-slate-900 border border-slate-800 p-4 rounded-2xl flex flex-col gap-2 shadow-lg">
+        <div class="flex justify-between items-center">
+            <h1 class="text-xs font-black text-cyan-400 uppercase tracking-wider"><i class="fa-solid fa-face-viewfinder mr-1"></i> TERMINAL KIOSK SCAN WAJAH</h1>
+            <p id="txt-db-status" onclick="ambilDatabaseSantri(true)" title="Klik untuk paksa sinkronisasi ulang data" class="text-[11px] text-amber-400 font-bold animate-pulse cursor-pointer hover:text-cyan-400 transition-colors">Menghubungkan cloud...</p>
         </div>
+        <select id="pilihan-kegiatan" class="w-full bg-slate-950 border-2 border-slate-700 rounded-xl px-3 py-3 text-xs font-black text-white outline-none focus:border-cyan-500 cursor-pointer">
+            <option value="Subuh">Jamaah Subuh</option>
+            <option value="Dzuhur">Jamaah Dzuhur</option>
+            <option value="Ashar">Jamaah Ashar</option>
+            <option value="Maghrib">Jamaah Maghrib</option>
+            <option value="Isya">Jamaah Isya</option>
+            <option value="Quranan">Ngaji al-Qur'an Bakdo Subuh</option>
+            <option value="Afsahan">Ngafsahi/Kursus Bakdo al-Qur'an</option>
+            <option value="PDF 1">Sekolah PDF Jam Pertama</option>
+            <option value="PDF 2">Sekolah PDF Jam Kedua</option>
+            <option value="PDF 3">Sekolah PDF Jam Ketiga</option>
+            <option value="Ndalem">Ngaji Ndalem Bakdo Ashar</option>
+            <option value="Sorogan">Sorogan Kitab</option>
+            <option value="Belajar">Jam Belajar</option>
+            <option value="Jumatan">Jumatan</option> <!-- Diperbaiki typo value -->
+            <option value="Ziarah">Ziarah Kubur</option> <!-- Diperbaiki typo value -->
+        </select>
+    </div>
 
-        <!-- Error Message -->
-        <div id="errorMessage" class="hidden bg-red-50 border-l-4 border-red-500 p-4 rounded-r-xl mb-8">
-            <div class="flex">
-                <div class="ml-3">
-                    <h3 class="text-sm font-semibold text-red-800">Terjadi Kesalahan</h3>
-                    <p id="errorText" class="text-xs text-red-700 mt-1"></p>
+    <div class="w-full max-w-md mx-auto my-auto flex flex-col justify-center items-center">
+        <div class="relative w-full aspect-square bg-slate-900 border-2 border-slate-800 rounded-3xl overflow-hidden shadow-2xl">
+            <video id="video-selfie" autoplay playsinline class="w-full h-full object-cover scale-x-[-1]"></video>
+            <div class="absolute inset-0 flex items-center justify-center pointer-events-none">
+                <div id="kotak-scan" class="w-64 h-64 border-4 border-dashed border-cyan-500/40 rounded-3xl flex items-center justify-center transition-all duration-300">
+                    <span id="instruksi" class="text-xs bg-slate-950/90 text-cyan-400 px-4 py-2 rounded-xl font-black uppercase tracking-widest border border-cyan-500/30">Memasang AI...</span>
                 </div>
-            </div>
-        </div>
-
-        <!-- Main Content -->
-        <div id="content" class="hidden space-y-8">
-            <!-- Metadata Cards -->
-            <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
-                <div class="bg-white p-5 rounded-2xl shadow-sm border border-slate-100 flex flex-col justify-between">
-                    <span class="text-xs font-semibold text-slate-400 uppercase tracking-wider">Halaman Dibuka Jam</span>
-                    <span id="metaJam" class="text-2xl font-bold text-slate-800 mt-2">-</span>
-                </div>
-                <div class="bg-white p-5 rounded-2xl shadow-sm border border-slate-100 flex flex-col justify-between">
-                    <span class="text-xs font-semibold text-slate-400 uppercase tracking-wider">Jadwal Seharusnya</span>
-                    <span id="metaKegiatan" class="text-lg font-bold text-slate-800 mt-2 leading-snug">-</span>
-                </div>
-                <div class="bg-white p-5 rounded-2xl shadow-sm border border-indigo-100 bg-indigo-50/20 flex flex-col justify-between">
-                    <span class="text-xs font-semibold text-indigo-500 uppercase tracking-wider">Kondisi Mood Anda (Sheets)</span>
-                    <div class="mt-2">
-                        <p id="metaMood" class="text-sm font-bold text-indigo-950">-</p>
-                        <p id="metaCatatan" class="text-xs text-indigo-600 mt-1 italic">-</p>
-                    </div>
-                </div>
-            </div>
-
-            <hr class="border-slate-200 my-8">
-
-            <!-- Advice List -->
-            <div>
-                <h2 class="text-xl font-bold text-slate-900 mb-6 flex items-center">
-                    <span class="w-2.5 h-6 bg-gradient-to-b from-indigo-600 to-purple-600 rounded-full mr-3"></span>
-                    10 Pilar Analisis & Nasehat Harian
-                </h2>
-                <div id="adviceContainer" class="space-y-6"></div>
             </div>
         </div>
     </div>
 
+    <!-- Canvas Tersembunyi untuk Proses Snapshot Foto -->
+    <canvas id="canvas-capture" class="hidden"></canvas>
+
+    <div class="w-full max-w-md mx-auto"><a href="dashboard.html" class="w-full bg-slate-900 text-slate-400 font-bold py-3.5 rounded-2xl text-xs uppercase text-center block tracking-wider">Kembali ke Dashboard</a></div>
+
+    <div id="pop-success" class="fixed inset-0 bg-slate-950/80 backdrop-blur-md flex items-center justify-center p-6 hidden z-50">
+        <div class="bg-emerald-500 text-slate-950 w-full max-w-sm p-6 rounded-3xl text-center shadow-2xl border-2 border-emerald-400 animate-bounce">
+            <span class="text-xs font-black tracking-widest block opacity-75">🔊 LOG JAMAAH DICATAT</span>
+            <span class="font-black text-xl block mt-1 tracking-wide" id="txt-nama-sukses">Nama Santri</span>
+        </div>
+    </div>
+
+    <div id="pop-warning" class="fixed inset-0 bg-slate-950/80 backdrop-blur-md flex items-center justify-center p-6 hidden z-50">
+        <div class="bg-amber-500 text-slate-950 w-full max-w-sm p-6 rounded-3xl text-center shadow-2xl border-2 border-amber-400">
+            <span class="text-xs font-black tracking-widest block opacity-75"><i class="fa-solid fa-triangle-exclamation mr-1"></i> AKSES DITOLAK</span>
+            <span class="font-black text-base block mt-1 tracking-wide" id="txt-nama-peringatan">NAMA SANTRI</span>
+            <span class="text-[11px] font-bold block mt-1 bg-slate-950/20 py-1 rounded-lg uppercase tracking-wider">Sudah Absen Pada Kegiatan Ini!</span>
+        </div>
+    </div>
+
     <script>
-        // MASUKKAN URL WEB APP GOOGLE APPS SCRIPT ANDA DI SINI
-        const WEB_APP_URL = "https://script.google.com/macros/s/AKfycbzUg2PbvCWboeldk3_cgcDDfMHP7BbtXVvPVzpbKMZkDwUCIdNVqXXX6Oj1KvkxnEIJvw/exec";
+        const API_URL = "https://script.google.com/macros/s/AKfycbwR-Ml0M6mCXj2yc_E0Ihll3V3HIDlithCuMYvIsxSrtZdhVDJNMFZ5WKb657o8di5x/exec";
+        let video = document.getElementById('video-selfie');
+        let label = document.getElementById('instruksi');
+        let kotakScan = document.getElementById('kotak-scan');
+        let dbStatus = document.getElementById('txt-db-status');
+        let canvasCap = document.getElementById('canvas-capture');
+        let isProcessing = false;
+        let databaseSantri = [];
 
-        // Otomatis berjalan saat pertama kali halaman dibuka (Membaca Cache)
-        window.addEventListener('DOMContentLoaded', () => {
-            loadData(false); 
-        });
+        const AMBANG_BATAS_KETAT = 0.48;    
+        const DETECTOR_INPUT_SIZE = 416;    
+        const DETECTOR_SCORE_THRESH = 0.5;  
+        
+        const GENDER_KIOSK = ""; 
 
-        async function loadData(isForceRefresh) {
-            const btn = document.getElementById('btnRefresh');
-            const loader = document.getElementById('loader');
-            const loaderText = document.getElementById('loaderText');
-            const content = document.getElementById('content');
-            const errorDiv = document.getElementById('errorMessage');
-            const errorText = document.getElementById('errorText');
-            const adviceContainer = document.getElementById('adviceContainer');
-            const txtSyncTime = document.getElementById('txtSyncTime');
+        let deteksiTerakhir = null;
+        let hitungKonsistensi = 0;
+        const TARGET_KONSISTENSI = 2; 
 
-            // Setup UI State
-            btn.disabled = true;
-            btn.classList.add('opacity-50', 'cursor-not-allowed');
-            loader.classList.remove('hidden');
-            errorDiv.classList.add('hidden');
-            
-            if(isForceRefresh) {
-                loaderText.innerText = "Menghubungkan langsung ke Gemini AI (Realtime Sync)... Silakan tunggu tawa Anda diracik.";
-            } else {
-                loaderText.innerText = "Membaca data nasehat dari penyimpanan cache Sheets...";
+        const CACHE_DB_KEY = 'cache_database_santri';
+        const CACHE_DB_TIME_KEY = 'cache_database_time';
+        const DURASI_CACHE_DB = 6 * 60 * 60 * 1000; 
+
+        function bunyikanBeep(frekuensi, durasi) {
+            try {
+                const audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+                const oscillator = audioCtx.createOscillator();
+                const gainNode = audioCtx.createGain();
+                 oscillator.connect(gainNode);
+                gainNode.connect(audioCtx.destination);
+                oscillator.type = 'sine';
+                oscillator.frequency.value = frekuensi;
+                gainNode.gain.setValueAtTime(0.3, audioCtx.currentTime);
+                oscillator.start();
+                gainNode.gain.exponentialRampToValueAtTime(0.00001, audioCtx.currentTime + durasi);
+                oscillator.stop(audioCtx.currentTime + durasi);
+            } catch (e) {}
+        }
+
+        async function ambilDatabaseSantri(paksaSinkron = false) {
+            const cachedDb = localStorage.getItem(CACHE_DB_KEY);
+            const cachedTime = localStorage.getItem(CACHE_DB_TIME_KEY);
+
+            if (!paksaSinkron && cachedDb && cachedTime && (Date.now() - cachedTime < DURASI_CACHE_DB)) {
+                console.log("Menggunakan database santri dari Local Storage (Instan)...");
+                databaseSantri = JSON.parse(cachedDb);
+                dbStatus.innerText = `🟢 Kiosk Ready (Cache: ${databaseSantri.length} Santri)`;
+                dbStatus.classList.remove('animate-pulse');
+                return;
             }
 
             try {
-                // Tambahkan parameter ?refresh=true jika user memaksa realtime sync
-                const fetchUrl = isForceRefresh ? `${WEB_APP_URL}?refresh=true` : WEB_APP_URL;
+                dbStatus.innerText = "🔄 Menyelaraskan data...";
+                dbStatus.classList.add('animate-pulse');
                 
-                const response = await fetch(fetchUrl);
-                if (!response.ok) throw new Error(`HTTP error! status: ${response.status}`);
+                const res = await fetch(`${API_URL}?aksi=ambil_database`, { method: "GET" });
+                const json = await res.json();
                 
-                const data = await response.json();
-
-                if (data.success) {
-                    // Update Nilai Box Info
-                    document.getElementById('metaJam').innerText = data.jamSekarang + " WIB";
-                    document.getElementById('metaSync').innerText = data.jamSyncTerakhir + " WIB";
-                    document.getElementById('metaKegiatan').innerText = data.kegiatanMestinya;
-                    document.getElementById('metaMood').innerText = data.moodC10;
-                    document.getElementById('metaCatatan').innerText = data.moodA11;
-                    txtSyncTime.classList.remove('hidden');
-
-                    // Bersihkan kontainer dan cetak kartu nasehat
-                    adviceContainer.innerHTML = '';
-                    const nasehatList = Array.isArray(data.nasehat) ? data.nasehat : [data.nasehat];
+                if (json.status === "success") {
+                    databaseSantri = json.data;
+                    localStorage.setItem(CACHE_DB_KEY, JSON.stringify(databaseSantri));
+                    localStorage.setItem(CACHE_DB_TIME_KEY, Date.now().toString());
                     
-                    nasehatList.forEach((teks, index) => {
-                        const card = document.createElement('div');
-                        card.className = "bg-white p-6 md:p-8 rounded-2xl shadow-sm border border-slate-100 hover:shadow-md transition-shadow relative overflow-hidden group";
-                        card.innerHTML = `
-                            <div class="absolute top-0 left-0 w-1.5 h-full bg-gradient-to-b from-indigo-500 to-purple-500"></div>
-                            <div class="flex items-start">
-                                <div class="flex-shrink-0 bg-indigo-50 text-indigo-600 font-bold w-10 h-10 rounded-xl flex items-center justify-center text-sm mr-4 group-hover:bg-indigo-600 group-hover:text-white transition-colors">
-                                    ${String(index + 1).padStart(2, '0')}
-                                </div>
-                                <div class="flex-1">
-                                    <p class="text-slate-700 leading-relaxed text-justify text-sm md:text-base">${teks}</p>
-                                </div>
-                            </div>
-                        `;
-                        adviceContainer.appendChild(card);
-                    });
-
-                    content.classList.remove('hidden');
+                    dbStatus.innerText = `🟢 Cloud Kiosk Ready (${databaseSantri.length} Santri)`;
+                    dbStatus.classList.remove('animate-pulse');
                 } else {
-                    throw new Error(data.error || "Gagal memproses data backend.");
+                    throw new Error("Respon server gagal");
+                }
+            } catch (error) {
+                console.error("Gagal menyinkronkan database dari cloud:", error);
+                if (cachedDb) {
+                    databaseSantri = JSON.parse(cachedDb);
+                    dbStatus.innerText = `⚠️ Cloud Offline (Memakai Data Lokal)`;
+                    dbStatus.classList.remove('animate-pulse');
+                } else {
+                    dbStatus.innerText = "🔴 Cloud Putus & Cache Kosong";
+                }
+            }
+        }
+
+        window.addEventListener('DOMContentLoaded', async () => {
+            if (!localStorage.getItem('session_nama')) { window.location.href = "index.html"; return; }
+            try {
+                label.innerText = "MEMUAT AI KIOSK...";
+                await faceapi.nets.tinyFaceDetector.loadFromUri('https://unpkg.com/@vladmandic/face-api/model');
+                await faceapi.nets.faceLandmark68Net.loadFromUri('https://unpkg.com/@vladmandic/face-api/model');
+                await faceapi.nets.faceRecognitionNet.loadFromUri('https://unpkg.com/@vladmandic/face-api/model');
+                
+                await ambilDatabaseSantri(false);
+                
+                const stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: "user" }, audio: false });
+                video.srcObject = stream;
+                label.innerText = "HADAPKAN WAJAH KE KAMERA";
+                
+                setInterval(async () => {
+                    if (isProcessing || video.paused || video.ended || databaseSantri.length === 0) return;
+                    
+                    const hasilKamera = await faceapi.detectSingleFace(video, new faceapi.TinyFaceDetectorOptions({ 
+                        inputSize: DETECTOR_INPUT_SIZE, 
+                        scoreThreshold: DETECTOR_SCORE_THRESH 
+                    })).withFaceLandmarks().withFaceDescriptor();
+                    
+                    if (hasilKamera) {
+                        verifikasiWajahLokal(hasilKamera.descriptor);
+                    } else {
+                        hitungKonsistensi = 0;
+                        deteksiTerakhir = null;
+                    }
+                }, 400);
+            } catch (e) { label.innerText = "AI OFFLINE"; }
+        });
+
+        // Fungsi pembantu untuk mengambil snapshot dari video camera
+        function ambilSnapshotFoto() {
+            try {
+                canvasCap.width = video.videoWidth;
+                canvasCap.height = video.videoHeight;
+                const ctx = canvasCap.getContext('2d');
+                
+                // Efek mirror disamakan dengan tampilan video kiosk (scale-x-[-1])
+                ctx.translate(canvasCap.width, 0);
+                ctx.scale(-1, 1);
+                
+                ctx.drawImage(video, 0, 0, canvasCap.width, canvasCap.height);
+                // Mengompres kualitas gambar ke 0.6 (60%) agar pengiriman ke Google Sheets ringan dan cepat
+                return canvasCap.toDataURL('image/jpeg', 0.6);
+            } catch (error) {
+                console.error("Gagal mengambil foto:", error);
+                return "";
+            }
+        }
+
+        async function verifikasiWajahLokal(descriptorKamera) {
+            let santriDitemukan = null; 
+            let jarakTerkecil = 1.0;
+
+            for (let santri of databaseSantri) {
+                try {
+                    if (GENDER_KIOSK !== "") {
+                        let genderSantri = santri.gender ? santri.gender.toString().trim().toUpperCase() : "";
+                        let matchesL = (GENDER_KIOSK === "L" && (genderSantri === "L" || genderSantri === "LAKI-LAKI"));
+                        let matchesP = (GENDER_KIOSK === "P" && (genderSantri === "P" || genderSantri === "PEREMPUAN"));
+                        if (!matchesL && !matchesP) continue;
+                    }
+
+                    let dataVektorRaw = santri.vektor;
+                    if(!dataVektorRaw) continue;
+                    
+                    let dataVektorArr = JSON.parse(dataVektorRaw);
+                    let arrayVektorDb = Array.isArray(dataVektorArr) ? dataVektorArr : Object.values(dataVektorArr);
+                    
+                    if(arrayVektorDb.length !== 128) continue; 
+
+                    let jarakSains = faceapi.euclideanDistance(descriptorKamera, arrayVektorDb);
+
+                    if (jarakSains < jarakTerkecil && jarakSains < AMBANG_BATAS_KETAT) { 
+                        jarakTerkecil = jarakSains; 
+                        santriDitemukan = santri; 
+                    }
+                } catch(e){}
+            }
+
+            if (santriDitemukan) {
+                if (deteksiTerakhir === santriDitemukan.nik) {
+                    hitungKonsistensi++;
+                } else {
+                    deteksiTerakhir = santriDitemukan.nik;
+                    hitungKonsistensi = 1;
+                    return;
                 }
 
-            } catch (error) {
-                console.error(error);
-                errorText.innerText = error.message;
-                errorDiv.classList.remove('hidden');
-            } finally {
-                btn.disabled = false;
-                btn.classList.remove('opacity-50', 'cursor-not-allowed');
-                loader.classList.add('hidden');
+                if (hitungKonsistensi >= TARGET_KONSISTENSI) {
+                    isProcessing = true;
+                    hitungKonsistensi = 0;
+                    deteksiTerakhir = null;
+
+                    kotakScan.className = "w-64 h-64 border-4 border-solid border-emerald-400 rounded-3xl flex items-center justify-center bg-emerald-500/10 scale-105";
+                    label.innerText = "MENCOCOKKAN BIOMETRIK...";
+
+                    // Ambil foto seketika saat wajah berhasil diverifikasi
+                    const dataFotoBase64 = ambilSnapshotFoto();
+
+                    const kegiatan = document.getElementById('pilihan-kegiatan').value;
+                    const hariIni = new Date().toISOString().split('T')[0]; 
+                    const storageKey = `absen_${hariIni}_${santriDitemukan.nik}_${kegiatan}`;
+
+                    if (localStorage.getItem(storageKey)) {
+                        document.getElementById('txt-nama-peringatan').innerText = santriDitemukan.nama.toUpperCase();
+                        document.getElementById('pop-warning').classList.remove('hidden');
+                        label.innerText = "SUDAH ABSEN SEBELUMNYA";
+                        kotakScan.className = "w-64 h-64 border-4 border-solid border-amber-500 rounded-3xl flex items-center justify-center bg-amber-500/10";
+                        
+                        bunyikanBeep(440, 0.08);
+                        setTimeout(() => bunyikanBeep(440, 0.08), 120);
+
+                        setTimeout(() => {
+                            document.getElementById('pop-warning').classList.add('hidden');
+                            isProcessing = false;
+                            label.innerText = "HADAPKAN WAJAH KE KAMERA";
+                            kotakScan.className = "w-64 h-64 border-4 border-dashed border-cyan-500/40 rounded-3xl flex items-center justify-center";
+                        }, 2500);
+                        return;
+                    }
+
+                    const fp = new URLSearchParams();
+                    fp.append('aksi', 'absen_santri');
+                    fp.append('nik', santriDitemukan.nik);
+                    fp.append('kegiatan', kegiatan);
+                    fp.append('petugas', localStorage.getItem('session_nama'));
+                    // Menyisipkan data foto ke server Apps Script tanpa merusak parameter lama
+                    fp.append('foto', dataFotoBase64); 
+
+                    try {
+                        let res = await fetch(API_URL, { method: "POST", headers: { "Content-Type": "application/x-www-form-urlencoded" }, body: fp.toString() });
+                        let r = await res.json();
+                        if(r.status === "success") {
+                            localStorage.setItem(storageKey, "TERCATAT");
+                            document.getElementById('txt-nama-sukses').innerText = santriDitemukan.nama.toUpperCase();
+                            document.getElementById('pop-success').classList.remove('hidden');
+                            bunyikanBeep(1000, 0.25);
+                        }
+                    } catch(e){}
+                    
+                    setTimeout(() => {
+                        document.getElementById('pop-success').classList.add('hidden');
+                        isProcessing = false; 
+                        label.innerText = "HADAPKAN WAJAH KE KAMERA";
+                        kotakScan.className = "w-64 h-64 border-4 border-dashed border-cyan-500/40 rounded-3xl flex items-center justify-center";
+                    }, 2000);
+                }
+
+            } else {
+                hitungKonsistensi = 0;
+                deteksiTerakhir = null;
+                
+                isProcessing = true; 
+                label.innerText = "WAJAH TIDAK DIKENAL";
+                kotakScan.className = "w-64 h-64 border-4 border-solid border-red-500 rounded-3xl flex items-center justify-center bg-red-500/10";
+                bunyikanBeep(220, 0.4);
+
+                setTimeout(() => { 
+                    isProcessing = false;
+                    label.innerText = "HADAPKAN WAJAH KE KAMERA"; 
+                    kotakScan.className = "w-64 h-64 border-4 border-dashed border-cyan-500/40 rounded-3xl flex items-center justify-center";
+                }, 1200);
             }
         }
     </script>
