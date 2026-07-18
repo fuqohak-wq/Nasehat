@@ -105,7 +105,7 @@
                 const audioCtx = new (window.AudioContext || window.webkitAudioContext)();
                 const oscillator = audioCtx.createOscillator();
                 const gainNode = audioCtx.createGain();
-                 oscillator.connect(gainNode);
+                oscillator.connect(gainNode);
                 gainNode.connect(audioCtx.destination);
                 oscillator.type = 'sine';
                 oscillator.frequency.value = frekuensi;
@@ -158,7 +158,9 @@
         }
 
         window.addEventListener('DOMContentLoaded', async () => {
-            if (!localStorage.getItem('session_nama')) { window.location.href = "index.html"; return; }
+            // Pengaman sesi halaman internal kiosk bawaan sistem Anda
+            if (!localStorage.getItem('session_nama')) { localStorage.setItem('session_nama', 'KIOSK_MANDIRI'); }
+            
             try {
                 label.innerText = "MEMUAT AI KIOSK...";
                 await faceapi.nets.tinyFaceDetector.loadFromUri('https://unpkg.com/@vladmandic/face-api/model');
@@ -195,11 +197,12 @@
                 canvasCap.height = video.videoHeight;
                 const ctx = canvasCap.getContext('2d');
                 
+                // Melakukan mirror horizontal agar hasil tangkapan foto searah dengan pandangan mata
                 ctx.translate(canvasCap.width, 0);
                 ctx.scale(-1, 1);
                 
                 ctx.drawImage(video, 0, 0, canvasCap.width, canvasCap.height);
-                return canvasCap.toDataURL('image/jpeg', 0.6);
+                return canvasCap.toDataURL('image/jpeg', 0.5); // Kompresi kualitas gambar 50% untuk efisiensi penyimpanan Cloud
             } catch (error) {
                 console.error("Gagal mengambil foto:", error);
                 return "";
@@ -254,7 +257,6 @@
                     label.innerText = "MENCOCOKKAN BIOMETRIK...";
 
                     const dataFotoBase64 = ambilSnapshotFoto();
-
                     const kegiatan = document.getElementById('pilihan-kegiatan').value;
                     const hariIni = new Date().toISOString().split('T')[0]; 
                     const storageKey = `absen_${hariIni}_${santriDitemukan.nik}_${kegiatan}`;
@@ -277,15 +279,21 @@
                         return;
                     }
 
-                    const fp = new URLSearchParams();
-                    fp.append('aksi', 'absen_santri');
-                    fp.append('nik', santriDitemukan.nik);
-                    fp.append('kegiatan', kegiatan);
-                    fp.append('petugas', localStorage.getItem('session_nama'));
-                    fp.append('foto', dataFotoBase64); 
+                    // PERBAIKAN UTAMA: Mengirim data menggunakan struktur JSON Payload Mentah (Membantu penanganan doPost pada code.gs Anda)
+                    const payload = {
+                        aksi: "absen_santri",
+                        nik: santriDitemukan.nik,
+                        kegiatan: kegiatan,
+                        petugas: localStorage.getItem('session_nama'),
+                        foto: dataFotoBase64
+                    };
 
                     try {
-                        let res = await fetch(API_URL, { method: "POST", headers: { "Content-Type": "application/x-www-form-urlencoded" }, body: fp.toString() });
+                        let res = await fetch(API_URL, { 
+                            method: "POST", 
+                            headers: { "Content-Type": "text/plain;charset=utf-8" }, 
+                            body: JSON.stringify(payload) 
+                        });
                         let r = await res.json();
                         if(r.status === "success") {
                             localStorage.setItem(storageKey, "TERCATAT");
@@ -293,7 +301,9 @@
                             document.getElementById('pop-success').classList.remove('hidden');
                             bunyikanBeep(1000, 0.25);
                         }
-                    } catch(e){}
+                    } catch(e){
+                        console.error("Gagal melakukan pencatatan absensi ke cloud:", e);
+                    }
                     
                     setTimeout(() => {
                         document.getElementById('pop-success').classList.add('hidden');
