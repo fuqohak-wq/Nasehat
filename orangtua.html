@@ -48,8 +48,8 @@
         <p class="text-xs font-bold uppercase tracking-wider">Belum Ada Data Yang Dimuat</p>
     </div>
 
-    <script>
-        // Menggunakan URL Web App Apps Script Anda yang terhubung dengan Terminal Kiosk
+<script>
+        // Menggunakan URL Web App Apps Script Utama (Menarik data foto & absensi harian)
         const API_URL = "https://script.google.com/macros/s/AKfycbxJ8zjyd5YLsPhpq52ntO95-Bn5gNJlKLHSozMZ1kWFJAOGir5co21ln3gpiVI9UCx2/exec";
 
         // Daftar 13 kegiatan persis seperti pilihan kiosk scanner
@@ -79,17 +79,17 @@
             loader.classList.remove('hidden');
             grid.classList.add('hidden');
             kosong.classList.add('hidden');
-            metaBox.classList.add('hidden');
+            if(metaBox) metaBox.classList.add('hidden');
 
             try {
-                // PERBAIKAN: Menyesuaikan aksi GET agar menembak 'ambil_foto_hari_ini' sesuai pakem code.gs terbaru
+                // Tembak aksi ambil_foto_hari_ini untuk mendapatkan log harian dari cloud
                 const respon = await fetch(`${API_URL}?aksi=ambil_foto_hari_ini`, { method: "GET" });
                 const json = await respon.json();
 
                 loader.classList.add('hidden');
 
                 if (json.status === "success" && Array.isArray(json.data)) {
-                    // Filter kumpulan data foto cloud hari ini secara lokal berdasarkan NIK yang diinput orang tua
+                    // Saring array log harian secara lokal berdasarkan NIK anak
                     const dataFiltered = json.data.filter(item => item.nik.toString().trim() === inputNik);
                     
                     if (dataFiltered.length === 0) {
@@ -98,19 +98,22 @@
                         return;
                     }
 
-                    // Tampilkan meta data identitas anak yang ditarik otomatis dari master oleh server cloud
-                    document.getElementById('txt-meta-nama').innerText = dataFiltered[0].nama;
-                    document.getElementById('txt-meta-kelas').innerText = dataFiltered[0].kelas;
-                    metaBox.classList.remove('hidden');
+                    // Muat info metadata nama & kelas jika elemen DOM pembungkusnya tersedia
+                    if (metaBox) {
+                        const txtNama = document.getElementById('txt-meta-nama');
+                        const txtKelas = document.getElementById('txt-meta-kelas');
+                        if (txtNama) txtNama.innerText = dataFiltered[0].nama || "SANTRI";
+                        if (txtKelas) txtKelas.innerText = dataFiltered[0].kelas || "-";
+                        metaBox.classList.remove('hidden');
+                    }
 
-                    // Bangun struktur peta objek untuk dicocokkan ke grid kontainer kegiatan
+                    // Petakan gambar base64 ke dalam key objek kegiatan
                     const petaFoto = {};
                     dataFiltered.forEach(item => {
-                        // Jika ada duplikasi log kegiatan di hari yang sama, ambil data foto yang paling baru (terakhir disubmit)
                         petaFoto[item.kegiatan] = item.foto;
                     });
 
-                    grid.innerHTML = ""; // Pembersihan kontainer lama
+                    grid.innerHTML = "";
                     grid.classList.remove('hidden');
 
                     DAFTAR_KEGIATAN.forEach(kegiatan => {
