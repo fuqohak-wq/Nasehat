@@ -91,7 +91,7 @@
     </div>
 
 <script>
-        // Inisialisasi Kedua URL Web App secara Terpisah
+        // 1. Inisialisasi Kedua URL Web App secara Terpisah
         const API_URL = "https://script.google.com/macros/s/AKfycbxJ8zjyd5YLsPhpq52ntO95-Bn5gNJlKLHSozMZ1kWFJAOGir5co21ln3gpiVI9UCx2/exec";
         const API_TABUNGAN_URL = "https://script.google.com/macros/s/AKfycbxVH7-d8GrgHjaDeT15az9zsHvwVedApP2IKBXl8ObIfexlmJG_-qCveSfmh7SL5cuX/exec";
 
@@ -101,6 +101,7 @@
         let dbStatus = document.getElementById('txt-db-status');
         let canvasCap = document.getElementById('canvas-capture');
         
+        // Target Element Widget Tabungan
         let widgetTabungan = document.getElementById('widget-tabungan-santri');
         let lblNamaTabungan = document.getElementById('label-nama-tabungan');
         let lblNikTabungan = document.getElementById('label-nik-tabungan');
@@ -108,7 +109,7 @@
 
         let isProcessing = false;
         let databaseSantri = [];
-        let cacheSaldoTabungan = {}; // Menyimpan data saldo di RAM lokal supaya performa Kiosk instan
+        let cacheSaldoTabungan = {}; // Penyimpanan RAM Lokal
 
         const AMBANG_BATAS_KETAT = 0.48;    
         const DETECTOR_INPUT_SIZE = 416;    
@@ -123,6 +124,7 @@
         const CACHE_DB_TIME_KEY = 'cache_database_time';
         const DURASI_CACHE_DB = 6 * 60 * 60 * 1000; 
 
+        // Fungsi utility pembantu untuk format mata uang rupiah standar
         function formatRupiah(angka) {
             if (angka === undefined || angka === null || isNaN(angka)) return "Rp 0";
             return "Rp " + parseInt(angka).toLocaleString('id-ID');
@@ -144,14 +146,14 @@
             } catch (e) {}
         }
 
-        // Memuat database wajah santri
         async function ambilDatabaseSantri(paksaSinkron = false) {
             const cachedDb = localStorage.getItem(CACHE_DB_KEY);
             const cachedTime = localStorage.getItem(CACHE_DB_TIME_KEY);
 
             if (!paksaSinkron && cachedDb && cachedTime && (Date.now() - cachedTime < DURASI_CACHE_DB)) {
+                console.log("Menggunakan database santri dari Local Storage (Instan)...");
                 databaseSantri = JSON.parse(cachedDb);
-                dbStatus.innerText = `🟢 Kiosk Ready (Lokal: ${databaseSantri.length} Santri)`;
+                dbStatus.innerText = `🟢 Kiosk Ready (Cache: ${databaseSantri.length} Santri)`;
                 dbStatus.classList.remove('animate-pulse');
                 muatSaldoKeMemoriLokal();
                 return;
@@ -168,8 +170,11 @@
                     databaseSantri = json.data;
                     localStorage.setItem(CACHE_DB_KEY, JSON.stringify(databaseSantri));
                     localStorage.setItem(CACHE_DB_TIME_KEY, Date.now().toString());
+                    
                     dbStatus.innerText = `🟢 Cloud Kiosk Ready (${databaseSantri.length} Santri)`;
                     dbStatus.classList.remove('animate-pulse');
+                } else {
+                    throw new Error("Respon server gagal");
                 }
                 await muatSaldoKeMemoriLokal();
             } catch (error) {
@@ -178,11 +183,13 @@
                     databaseSantri = JSON.parse(cachedDb);
                     dbStatus.innerText = `⚠️ Cloud Offline (Memakai Data Lokal)`;
                     dbStatus.classList.remove('animate-pulse');
+                } else {
+                    dbStatus.innerText = "🔴 Cloud Putus & Cache Kosong";
                 }
             }
         }
 
-        // Taktik Akselerasi: Sinkronisasi seluruh saldo ke RAM browser saat startup
+        // Memuat database saldo tabungan ke RAM untuk pencarian berkecepatan tinggi
         async function muatSaldoKeMemoriLokal() {
             try {
                 const res = await fetch(`${API_TABUNGAN_URL}?aksi=ambil_database`, { method: "GET" });
@@ -190,9 +197,13 @@
                 if (json.status === "success" && Array.isArray(json.data)) {
                     cacheSaldoTabungan = {};
                     json.data.forEach(s => {
-                        if(s.nik) cacheSaldoTabungan[s.nik.toString().trim()] = s.tabungan || s.saldo || 0;
+                        if (s.nik) {
+                            // Ekstraksi nilai saldo fleksibel dari properti objek
+                            let nilai = s.tabungan !== undefined ? s.tabungan : (s.saldo !== undefined ? s.saldo : 0);
+                            cacheSaldoTabungan[s.nik.toString().trim()] = nilai;
+                        }
                     });
-                    console.log("Database saldo tabungan berhasil dimuat ke memori lokal.");
+                    console.log("Database saldo tabungan berhasil disinkronkan ke memori lokal.");
                 }
             } catch (e) {
                 console.error("Gagal memuat saldo tabungan:", e);
@@ -234,8 +245,7 @@
 
         function ambilSnapshotFoto() {
             try {
-                // Optimalisasi Resolusi Foto Kiosk: 320x320 dan kompresi tingkat 0.35 
-                // Membuat penulisan data base64 ke sheet harian menjadi secepat kilat
+                // Optimalisasi Resolusi Foto Kiosk ke 320x320 agar penulisan log harian secepat kilat
                 canvasCap.width = 320;
                 canvasCap.height = 320;
                 const ctx = canvasCap.getContext('2d');
@@ -244,6 +254,7 @@
                 ctx.drawImage(video, 0, 0, canvasCap.width, canvasCap.height);
                 return canvasCap.toDataURL('image/jpeg', 0.35);
             } catch (error) {
+                console.error("Gagal mengambil foto:", error);
                 return "";
             }
         }
@@ -266,6 +277,7 @@
                     
                     let dataVektorArr = JSON.parse(dataVektorRaw);
                     let arrayVektorDb = Array.isArray(dataVektorArr) ? dataVektorArr : Object.values(dataVektorArr);
+                    
                     if(arrayVektorDb.length !== 128) continue; 
 
                     let jarakSains = faceapi.euclideanDistance(descriptorKamera, arrayVektorDb);
@@ -296,7 +308,7 @@
                     const hariIni = new Date().toISOString().split('T')[0]; 
                     const storageKey = `absen_${hariIni}_${nikBersih}_${kegiatan}`;
 
-                    // PERBAIKAN 1: PROTEKSI TOTAL ABSENSI GANDA DIKAWAL DI BARIS TERDEPAN
+                    // PROTEKSI ABSENSI GANDA: Dipasang paling atas sebelum request cloud
                     if (localStorage.getItem(storageKey)) {
                         document.getElementById('txt-nama-peringatan').innerText = santriDitemukan.nama.toUpperCase();
                         document.getElementById('pop-warning').classList.remove('hidden');
@@ -315,17 +327,38 @@
                         return;
                     }
 
-                    // PERBAIKAN 2: INTEGRASI SALDO MEMORI LOKAL YANG AKURAT DAN SECEPAT KILAT (0 MS)
-                    const saldoInstan = cacheSaldoTabungan[nikBersih] !== undefined ? cacheSaldoTabungan[nikBersih] : 0;
+                    // TAMPILKAN WIDGET DAN DATA IDENTITAS
                     lblNamaTabungan.innerText = santriDitemukan.nama ? santriDitemukan.nama.toUpperCase() : "NAMA SANTRI";
                     lblNikTabungan.innerText = santriDitemukan.nik || "-";
-                    lblNominalTabungan.innerText = formatRupiah(saldoInstan);
-                    widgetTabungan.classList.remove('hidden');
+                    
+                    // VALIDASI DAN FALLBACK CADANGAN SALDO
+                    if (cacheSaldoTabungan[nikBersih] !== undefined) {
+                        lblNominalTabungan.innerText = formatRupiah(cacheSaldoTabungan[nikBersih]);
+                        widgetTabungan.classList.remove('hidden');
+                    } else {
+                        // Jalur Cadangan: Jika cache RAM kosong, ambil langsung dari URL Kedua secara realtime
+                        lblNominalTabungan.innerText = "Memuat...";
+                        widgetTabungan.classList.remove('hidden');
+                        fetch(`${API_TABUNGAN_URL}?aksi=ambil_database`)
+                            .then(res => res.json())
+                            .then(json => {
+                                if (json.status === "success" && Array.isArray(json.data)) {
+                                    const cocok = json.data.find(s => s.nik && s.nik.toString().trim() === nikBersih);
+                                    if (cocok) {
+                                        let val = cocok.tabungan !== undefined ? cocok.tabungan : (cocok.saldo !== undefined ? cocok.saldo : 0);
+                                        lblNominalTabungan.innerText = formatRupiah(val);
+                                        cacheSaldoTabungan[nikBersih] = val; // masukkan ke RAM untuk scan berikutnya
+                                    } else {
+                                        lblNominalTabungan.innerText = "Rp 0";
+                                    }
+                                }
+                            }).catch(() => { lblNominalTabungan.innerText = "Rp 0"; });
+                    }
 
                     kotakScan.className = "w-64 h-64 border-4 border-solid border-emerald-400 rounded-3xl flex items-center justify-center bg-emerald-500/10 scale-105";
                     label.innerText = "MENCOCOKKAN BIOMETRIK...";
 
-                    // Kunci lokal segera diset agar sistem tidak dapat ditembus berulang kali selama proses antrean server
+                    // Kunci status lokal segera
                     localStorage.setItem(storageKey, "TERCATAT");
 
                     const dataFotoBase64 = ambilSnapshotFoto();
@@ -341,15 +374,15 @@
                     document.getElementById('pop-success').classList.remove('hidden');
                     bunyikanBeep(1000, 0.25);
 
-                    // PENGIRIMAN DATA ASINKRONUS (BACKGROUND THREAD) AGAR TIDAK MEMBUAT KIOSK STUCK/LEMOT
+                    // PENGIRIMAN DATA ASINKRONUS (BACKGROUND THREAD) AGAR KIOSK TIDAK LEMOT ATAU MACET
                     fetch(API_URL, { 
                         method: "POST", 
                         headers: { "Content-Type": "text/plain;charset=utf-8" }, 
                         body: JSON.stringify(payload) 
                     }).then(res => res.json())
                       .then(r => {
-                          if(r.status !== "success") { 
-                              localStorage.removeItem(storageKey); // Batalkan penguncian lokal jika server menolak
+                          if(r.status !== "success") {
+                              localStorage.removeItem(storageKey); // Batalkan penguncian jika server menolak
                           }
                       })
                       .catch(e => console.error("Koneksi cloud tertunda:", e));
