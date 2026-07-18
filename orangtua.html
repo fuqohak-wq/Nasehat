@@ -21,6 +21,19 @@
                 <i class="fa-solid fa-magnifying-glass"></i> CARI
             </button>
         </div>
+        
+        <!-- Papan Nama Meta Santri Saat Berhasil Ditemukan -->
+        <div id="meta-santri" class="mt-4 p-3 bg-slate-950 rounded-xl border border-slate-800 flex justify-between items-center hidden">
+            <div>
+                <span class="text-[10px] font-bold text-cyan-400 block uppercase tracking-widest">NAMA SANTRI</span>
+                <span id="txt-meta-nama" class="text-sm font-black text-white uppercase">Nama Anak</span>
+            </div>
+            <div class="text-right">
+                <span class="text-[10px] font-bold text-slate-500 block uppercase tracking-widest">KELAS</span>
+                <span id="txt-meta-kelas" class="text-sm font-black text-emerald-400">Pusat / -</span>
+            </div>
+        </div>
+
         <p id="loading-status" class="text-xs font-bold mt-3 text-amber-400 hidden"><i class="fa-solid fa-spinner animate-spin mr-1"></i> Membuka album foto hari ini...</p>
     </div>
 
@@ -36,16 +49,16 @@
     </div>
 
     <script>
-        // Samakan dengan URL Web App Apps Script Anda
-        const API_URL = "https://script.google.com/macros/s/AKfycbwR-Ml0M6mCXj2yc_E0Ihll3V3HIDlithCuMYvIsxSrtZdhVDJNMFZ5WKb657o8di5x/exec";
+        // Menggunakan URL Web App Apps Script Anda yang terhubung dengan Terminal Kiosk
+        const API_URL = "https://script.google.com/macros/s/AKfycbxJ8zjyd5YLsPhpq52ntO95-Bn5gNJlKLHSozMZ1kWFJAOGir5co21ln3gpiVI9UCx2/exec";
 
-        // Daftar 13 kegiatan persis seperti yang ada pada pilihan kiosk scanner
+        // Daftar 13 kegiatan persis seperti pilihan kiosk scanner
         const DAFTAR_KEGIATAN = [
             "Subuh", "Quranan", "Afsahan", "PDF 1", "PDF 2", "PDF 3", 
             "Dzuhur", "Ashar", "Ndalem", "Maghrib", "Sorogan", "Isya", "Belajar"
         ];
 
-        // Nama format display agar lebih enak dibaca oleh orang tua
+        // Format label display untuk orang tua
         const LABEL_KEGIATAN = {
             "Subuh": "Jamaah Subuh", "Dzuhur": "Jamaah Dzuhur", "Ashar": "Jamaah Ashar",
             "Maghrib": "Jamaah Maghrib", "Isya": "Jamaah Isya", "Quranan": "Ngaji Bakdo Subuh",
@@ -55,27 +68,49 @@
         };
 
         async function cariFotoSantri() {
-            const nik = document.getElementById('input-nik').value.trim();
-            if (!nik) { alert("Silakan masukkan NIK terlebih dahulu"); return; }
+            const inputNik = document.getElementById('input-nik').value.trim();
+            if (!inputNik) { alert("Silakan masukkan NIK terlebih dahulu"); return; }
 
             const loader = document.getElementById('loading-status');
             const grid = document.getElementById('grid-foto-kegiatan');
             const kosong = document.getElementById('status-kosong');
+            const metaBox = document.getElementById('meta-santri');
 
             loader.classList.remove('hidden');
             grid.classList.add('hidden');
             kosong.classList.add('hidden');
+            metaBox.classList.add('hidden');
 
             try {
-                const respon = await fetch(`${API_URL}?aksi=lihat_foto_harian&nik=${nik}`, { method: "GET" });
+                // PERBAIKAN: Menyesuaikan aksi GET agar menembak 'ambil_foto_hari_ini' sesuai pakem code.gs terbaru
+                const respon = await fetch(`${API_URL}?aksi=ambil_foto_hari_ini`, { method: "GET" });
                 const json = await respon.json();
 
                 loader.classList.add('hidden');
 
-                if (json.status === "success") {
-                    const dataFoto = json.data; // Berisi objek { "Subuh": "base64...", "Isya": "base64..." }
+                if (json.status === "success" && Array.isArray(json.data)) {
+                    // Filter kumpulan data foto cloud hari ini secara lokal berdasarkan NIK yang diinput orang tua
+                    const dataFiltered = json.data.filter(item => item.nik.toString().trim() === inputNik);
                     
-                    grid.innerHTML = ""; // Bersihkan kontainer lama
+                    if (dataFiltered.length === 0) {
+                        kosong.classList.remove('hidden');
+                        alert("Tidak ditemukan rekaman absensi foto untuk NIK ini pada hari ini.");
+                        return;
+                    }
+
+                    // Tampilkan meta data identitas anak yang ditarik otomatis dari master oleh server cloud
+                    document.getElementById('txt-meta-nama').innerText = dataFiltered[0].nama;
+                    document.getElementById('txt-meta-kelas').innerText = dataFiltered[0].kelas;
+                    metaBox.classList.remove('hidden');
+
+                    // Bangun struktur peta objek untuk dicocokkan ke grid kontainer kegiatan
+                    const petaFoto = {};
+                    dataFiltered.forEach(item => {
+                        // Jika ada duplikasi log kegiatan di hari yang sama, ambil data foto yang paling baru (terakhir disubmit)
+                        petaFoto[item.kegiatan] = item.foto;
+                    });
+
+                    grid.innerHTML = ""; // Pembersihan kontainer lama
                     grid.classList.remove('hidden');
 
                     DAFTAR_KEGIATAN.forEach(kegiatan => {
@@ -83,10 +118,9 @@
                         card.className = "bg-slate-900 border border-slate-800 rounded-2xl overflow-hidden shadow-md flex flex-col";
 
                         const labelBagus = LABEL_KEGIATAN[kegiatan] || kegiatan;
-                        const hasFoto = dataFoto[kegiatan];
+                        const hasFoto = petaFoto[kegiatan];
 
-                        if (hasFoto) {
-                            // Jika santri sudah melakukan kegiatan tersebut dan berhasil difoto
+                        if (hasFoto && hasFoto.toString().trim() !== "") {
                             card.innerHTML = `
                                 <div class="relative aspect-square w-full bg-slate-950">
                                     <img src="${hasFoto}" class="w-full h-full object-cover" alt="${kegiatan}">
@@ -97,7 +131,6 @@
                                 </div>
                             `;
                         } else {
-                            // Jika santri belum absen pada kegiatan tersebut
                             card.innerHTML = `
                                 <div class="relative aspect-square w-full bg-slate-950/60 flex flex-col items-center justify-center text-slate-700 p-4 border-b border-slate-800/50">
                                     <i class="fa-solid fa-camera text-2xl opacity-20 mb-1"></i>
@@ -113,7 +146,7 @@
 
                 } else {
                     kosong.classList.remove('hidden');
-                    alert("Gagal memuat data dari server cloud.");
+                    alert("Gagal memuat data dari server cloud atau format response tidak valid.");
                 }
             } catch (error) {
                 loader.classList.add('hidden');
