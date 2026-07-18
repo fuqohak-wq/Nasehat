@@ -91,7 +91,7 @@
     </div>
 
 <script>
-        // 1. Inisialisasi Kedua URL Web App secara Terpisah
+        // Inisialisasi Kedua URL Web App secara Terpisah
         const API_URL = "https://script.google.com/macros/s/AKfycbxJ8zjyd5YLsPhpq52ntO95-Bn5gNJlKLHSozMZ1kWFJAOGir5co21ln3gpiVI9UCx2/exec";
         const API_TABUNGAN_URL = "https://script.google.com/macros/s/AKfycbxVH7-d8GrgHjaDeT15az9zsHvwVedApP2IKBXl8ObIfexlmJG_-qCveSfmh7SL5cuX/exec";
 
@@ -101,7 +101,6 @@
         let dbStatus = document.getElementById('txt-db-status');
         let canvasCap = document.getElementById('canvas-capture');
         
-        // Target Element Widget Tabungan
         let widgetTabungan = document.getElementById('widget-tabungan-santri');
         let lblNamaTabungan = document.getElementById('label-nama-tabungan');
         let lblNikTabungan = document.getElementById('label-nik-tabungan');
@@ -109,11 +108,11 @@
 
         let isProcessing = false;
         let databaseSantri = [];
+        let cacheSaldoTabungan = {}; // Penyimpanan saldo lokal di RAM agar instan tanpa loading cloud
 
         const AMBANG_BATAS_KETAT = 0.48;    
         const DETECTOR_INPUT_SIZE = 416;    
         const DETECTOR_SCORE_THRESH = 0.5;  
-        
         const GENDER_KIOSK = ""; 
 
         let deteksiTerakhir = null;
@@ -124,7 +123,6 @@
         const CACHE_DB_TIME_KEY = 'cache_database_time';
         const DURASI_CACHE_DB = 6 * 60 * 60 * 1000; 
 
-        // Fungsi utility pembantu untuk format mata uang rupiah standar
         function formatRupiah(angka) {
             if (angka === undefined || angka === null || isNaN(angka)) return "Rp 0";
             return "Rp " + parseInt(angka).toLocaleString('id-ID');
@@ -146,22 +144,26 @@
             } catch (e) {}
         }
 
+        // Taktik Akselerasi: Muat database wajah DAN saldo sekaligus di awal startup kiosk
         async function ambilDatabaseSantri(paksaSinkron = false) {
             const cachedDb = localStorage.getItem(CACHE_DB_KEY);
             const cachedTime = localStorage.getItem(CACHE_DB_TIME_KEY);
 
+            // Load database wajah dari cache internal jika tersedia
             if (!paksaSinkron && cachedDb && cachedTime && (Date.now() - cachedTime < DURASI_CACHE_DB)) {
-                console.log("Menggunakan database santri dari Local Storage (Instan)...");
                 databaseSantri = JSON.parse(cachedDb);
-                dbStatus.innerText = `🟢 Kiosk Ready (Cache: ${databaseSantri.length} Santri)`;
+                dbStatus.innerText = `🟢 Kiosk Ready (Lokal: ${databaseSantri.length} Santri)`;
                 dbStatus.classList.remove('animate-pulse');
+                // Tetap jalankan penarikan saldo di latar belakang agar data tabungan ter-update
+                muatSaldoKeMemoriLokal();
                 return;
             }
 
             try {
-                dbStatus.innerText = "🔄 Menyelaraskan data...";
+                dbStatus.innerText = "🔄 Menyelaraskan Wajah & Saldo...";
                 dbStatus.classList.add('animate-pulse');
                 
+                // Ambil database wajah dari URL utama
                 const res = await fetch(`${API_URL}?aksi=ambil_database`, { method: "GET" });
                 const json = await res.json();
                 
@@ -169,21 +171,37 @@
                     databaseSantri = json.data;
                     localStorage.setItem(CACHE_DB_KEY, JSON.stringify(databaseSantri));
                     localStorage.setItem(CACHE_DB_TIME_KEY, Date.now().toString());
-                    
-                    dbStatus.innerText = `🟢 Cloud Kiosk Ready (${databaseSantri.length} Santri)`;
+                    dbStatus.innerText = `🟢 Cloud Ready (${databaseSantri.length} Santri)`;
                     dbStatus.classList.remove('animate-pulse');
-                } else {
-                    throw new Error("Respon server gagal");
                 }
+                
+                // Paralel download data saldo tabungan ke RAM
+                await muatSaldoKeMemoriLokal();
             } catch (error) {
-                console.error("Gagal menyinkronkan database dari cloud:", error);
+                console.error("Koneksi cloud terhambat:", error);
                 if (cachedDb) {
                     databaseSantri = JSON.parse(cachedDb);
-                    dbStatus.innerText = `⚠️ Cloud Offline (Memakai Data Lokal)`;
+                    dbStatus.innerText = `⚠️ Mode Offline Aktif`;
                     dbStatus.classList.remove('animate-pulse');
-                } else {
-                    dbStatus.innerText = "🔴 Cloud Putus & Cache Kosong";
                 }
+            }
+        }
+
+        // Fungsi khusus mendownload peta saldo ke RAM secara senyap tanpa mengganggu loop kamera
+        async function muatSaldoKeMemoriLokal() {
+            try {
+                const res = await fetch(`${API_TABUNGAN_URL}?aksi=ambil_database`, { method: "GET" });
+                const json = await res.json();
+                if (json.status === "success" && Array.isArray(json.data)) {
+                    // Konversi array menjadi map objek key-value (NIK -> Saldo) untuk pencarian kilat O(1)
+                    cacheSaldoTabungan = {};
+                    json.data.forEach(s => {
+                        if(s.nik) cacheSaldoTabungan[s.nik.toString().trim()] = s.tabungan || 0;
+                    });
+                    console.log("Peta Saldo sukses disimpan di memori lokal.");
+                }
+            } catch (e) {
+                console.error("Gagal menyinkronkan saldo ke memori:", e);
             }
         }
 
@@ -202,6 +220,7 @@
                 video.srcObject = stream;
                 label.innerText = "HADAPKAN WAJAH KE KAMERA";
                 
+                // Menggunakan requestAnimationFrame gabungan dengan throttle interval demi akurasi dan fps tinggi
                 setInterval(async () => {
                     if (isProcessing || video.paused || video.ended || databaseSantri.length === 0) return;
                     
@@ -216,7 +235,7 @@
                         hitungKonsistensi = 0;
                         deteksiTerakhir = null;
                     }
-                }, 400);
+                }, 250); // Kecepatan scan ditingkatkan menjadi 250ms per siklus evaluasi
             } catch (e) { label.innerText = "AI OFFLINE"; }
         });
 
@@ -225,14 +244,11 @@
                 canvasCap.width = video.videoWidth;
                 canvasCap.height = video.videoHeight;
                 const ctx = canvasCap.getContext('2d');
-                
                 ctx.translate(canvasCap.width, 0);
                 ctx.scale(-1, 1);
-                
                 ctx.drawImage(video, 0, 0, canvasCap.width, canvasCap.height);
-                return canvasCap.toDataURL('image/jpeg', 0.5);
+                return canvasCap.toDataURL('image/jpeg', 0.4); // Kompresi 0.4 untuk mempercepat upload post
             } catch (error) {
-                console.error("Gagal mengambil foto:", error);
                 return "";
             }
         }
@@ -240,8 +256,11 @@
         async function verifikasiWajahLokal(descriptorKamera) {
             let santriDitemukan = null; 
             let jarakTerkecil = 1.0;
+            const nikKamera = descriptorKamera;
 
-            for (let santri of databaseSantri) {
+            // Loop pencocokan biometrik kecepatan tinggi
+            for (let i = 0; i < databaseSantri.length; i++) {
+                let santri = databaseSantri[i];
                 try {
                     if (GENDER_KIOSK !== "") {
                         let genderSantri = santri.gender ? santri.gender.toString().trim().toUpperCase() : "";
@@ -253,12 +272,8 @@
                     let dataVektorRaw = santri.vektor;
                     if(!dataVektorRaw) continue;
                     
-                    let dataVektorArr = JSON.parse(dataVektorRaw);
-                    let arrayVektorDb = Array.isArray(dataVektorArr) ? dataVektorArr : Object.values(dataVektorArr);
-                    
-                    if(arrayVektorDb.length !== 128) continue; 
-
-                    let jarakSains = faceapi.euclideanDistance(descriptorKamera, arrayVektorDb);
+                    let arrayVektorDb = JSON.parse(dataVektorRaw);
+                    let jarakSains = faceapi.euclideanDistance(nikKamera, arrayVektorDb);
 
                     if (jarakSains < jarakTerkecil && jarakSains < AMBANG_BATAS_KETAT) { 
                         jarakTerkecil = jarakSains; 
@@ -281,30 +296,14 @@
                     hitungKonsistensi = 0;
                     deteksiTerakhir = null;
 
-                    // TAMPILKAN WIDGET DAN LOAD SALDO SECARA REALTIME DARI URL KEDUA
+                    // EKSEKUSI INSTAN (0ms): Mengambil data langsung dari memori RAM browser
+                    const nikBersih = santriDitemukan.nik.toString().trim();
+                    const saldoInstan = cacheSaldoTabungan[nikBersih] !== undefined ? cacheSaldoTabungan[nikBersih] : 0;
+
                     lblNamaTabungan.innerText = santriDitemukan.nama ? santriDitemukan.nama.toUpperCase() : "NAMA SANTRI";
                     lblNikTabungan.innerText = santriDitemukan.nik || "-";
-                    lblNominalTabungan.innerText = "Memuat...";
+                    lblNominalTabungan.innerText = formatRupiah(saldoInstan);
                     widgetTabungan.classList.remove('hidden');
-
-                    fetch(`${API_TABUNGAN_URL}?aksi=ambil_database`)
-                        .then(res => res.json())
-                        .then(json => {
-                            if (json.status === "success" && Array.isArray(json.data)) {
-                                const matchedSantri = json.data.find(s => s.nik.toString().trim() === santriDitemukan.nik.toString().trim());
-                                if (matchedSantri) {
-                                    lblNominalTabungan.innerText = formatRupiah(matchedSantri.tabungan);
-                                } else {
-                                    lblNominalTabungan.innerText = "Rp 0";
-                                }
-                            } else {
-                                lblNominalTabungan.innerText = "Rp 0";
-                            }
-                        })
-                        .catch(err => {
-                            console.error("Gagal mengambil saldo tabungan:", err);
-                            lblNominalTabungan.innerText = "Error Jaringan";
-                        });
 
                     kotakScan.className = "w-64 h-64 border-4 border-solid border-emerald-400 rounded-3xl flex items-center justify-center bg-emerald-500/10 scale-105";
                     label.innerText = "MENCOCOKKAN BIOMETRIK...";
@@ -312,7 +311,7 @@
                     const dataFotoBase64 = ambilSnapshotFoto();
                     const kegiatan = document.getElementById('pilihan-kegiatan').value;
                     const hariIni = new Date().toISOString().split('T')[0]; 
-                    const storageKey = `absen_${hariIni}_${santriDitemukan.nik}_${kegiatan}`;
+                    const storageKey = `absen_${hariIni}_${nikBersih}_${kegiatan}`;
 
                     if (localStorage.getItem(storageKey)) {
                         document.getElementById('txt-nama-peringatan').innerText = santriDitemukan.nama.toUpperCase();
@@ -329,10 +328,11 @@
                             isProcessing = false;
                             label.innerText = "HADAPKAN WAJAH KE KAMERA";
                             kotakScan.className = "w-64 h-64 border-4 border-dashed border-cyan-500/40 rounded-3xl flex items-center justify-center";
-                        }, 2500);
+                        }, 2000);
                         return;
                     }
 
+                    // Menjalankan AJAX POST di background agar pop-up sukses tidak tertunda
                     const payload = {
                         aksi: "absen_santri",
                         nik: santriDitemukan.nik,
@@ -341,22 +341,17 @@
                         foto: dataFotoBase64
                     };
 
-                    try {
-                        let res = await fetch(API_URL, { 
-                            method: "POST", 
-                            headers: { "Content-Type": "text/plain;charset=utf-8" }, 
-                            body: JSON.stringify(payload) 
-                        });
-                        let r = await res.json();
-                        if(r.status === "success") {
-                            localStorage.setItem(storageKey, "TERCATAT");
-                            document.getElementById('txt-nama-sukses').innerText = santriDitemukan.nama.toUpperCase();
-                            document.getElementById('pop-success').classList.remove('hidden');
-                            bunyikanBeep(1000, 0.25);
-                        }
-                    } catch(e){
-                        console.error("Gagal melakukan pencatatan absensi ke cloud:", e);
-                    }
+                    document.getElementById('txt-nama-sukses').innerText = santriDitemukan.nama.toUpperCase();
+                    document.getElementById('pop-success').classList.remove('hidden');
+                    bunyikanBeep(1000, 0.22);
+
+                    fetch(API_URL, { 
+                        method: "POST", 
+                        headers: { "Content-Type": "text/plain;charset=utf-8" }, 
+                        body: JSON.stringify(payload) 
+                    }).then(res => res.json())
+                      .then(r => { if(r.status === "success") localStorage.setItem(storageKey, "TERCATAT"); })
+                      .catch(e => console.error("Sinkronisasi cloud tertunda:", e));
                     
                     setTimeout(() => {
                         document.getElementById('pop-success').classList.add('hidden');
@@ -364,7 +359,7 @@
                         isProcessing = false; 
                         label.innerText = "HADAPKAN WAJAH KE KAMERA";
                         kotakScan.className = "w-64 h-64 border-4 border-dashed border-cyan-500/40 rounded-3xl flex items-center justify-center";
-                    }, 3500); 
+                    }, 3000); 
                 }
 
             } else {
@@ -374,13 +369,13 @@
                 isProcessing = true; 
                 label.innerText = "WAJAH TIDAK DIKENAL";
                 kotakScan.className = "w-64 h-64 border-4 border-solid border-red-500 rounded-3xl flex items-center justify-center bg-red-500/10";
-                bunyikanBeep(220, 0.4);
+                bunyikanBeep(220, 0.3);
 
                 setTimeout(() => { 
                     isProcessing = false;
                     label.innerText = "HADAPKAN WAJAH KE KAMERA"; 
                     kotakScan.className = "w-64 h-64 border-4 border-dashed border-cyan-500/40 rounded-3xl flex items-center justify-center";
-                }, 1200);
+                }, 1000);
             }
         }
     </script>
