@@ -96,12 +96,12 @@
         let databaseSantri = [];
 
         const AMBANG_BATAS_KETAT = 0.48;    
-        const DETECTOR_INPUT_SIZE = 416; // Tetap 416 sesuai kode asli agar tidak gagal mendeteksi
+        const DETECTOR_INPUT_SIZE = 416;    
         const DETECTOR_SCORE_THRESH = 0.5;  
 
         let deteksiTerakhir = null;
         let hitungKonsistensi = 0;
-        const TARGET_KONSISTENSI = 1; // DIUBAH KE 1: Langsung eksekusi begitu wajah teridentifikasi tanpa menunggu frame berulang
+        const TARGET_KONSISTENSI = 1; 
 
         const CACHE_DB_KEY = 'cache_database_santri';
         const CACHE_DB_TIME_KEY = 'cache_database_time';
@@ -171,7 +171,6 @@
                 video.srcObject = stream;
                 label.innerText = "HADAPKAN WAJAH KE KAMERA";
                 
-                // OPTIMASI: Mengubah interval pemindaian dari 400ms menjadi 100ms (Meningkat 300% Lebih Cepat)
                 setInterval(async () => {
                     if (isProcessing || video.paused || video.ended || databaseSantri.length === 0) return;
                     
@@ -186,7 +185,7 @@
                         hitungKonsistensi = 0;
                         deteksiTerakhir = null;
                     }
-                }, 100); 
+                }, 100);
             } catch (e) { label.innerText = "AI OFFLINE"; }
         });
 
@@ -250,9 +249,10 @@
 
                     localStorage.setItem(storageKey, "TERCATAT");
 
+                    // 1. POP-UP TERBUKA INSTAN DI DETIK KE-0 (Kiosk langsung merespons santri)
                     document.getElementById('txt-nama-sukses').innerText = santriDitemukan.nama.toUpperCase();
-                    document.getElementById('pop-nominal-tabungan').innerText = "Memproses...";
-                    document.getElementById('pop-pesan-motivasi').innerText = "Menghitung nominal saldo dan akumulasi poin realtime...";
+                    document.getElementById('pop-nominal-tabungan').innerText = "Memproses Saldo...";
+                    document.getElementById('pop-pesan-motivasi').innerText = "Mengambil data mutakhir secara realtime dari server...";
                     document.getElementById('pop-success').classList.remove('hidden');
                     
                     kotakScan.className = "w-64 h-64 border-4 border-solid border-emerald-400 rounded-3xl flex items-center justify-center bg-emerald-500/10 scale-105";
@@ -268,6 +268,7 @@
                         foto: dataFotoBase64
                     };
 
+                    // 2. TEMBAK DATA KE CLOUD DAN TUNGGU NILAI SALDO MUTAKHIR (Hanya butuh waktu ~1.5 detik)
                     try {
                         const responseCloud = await fetch(URL_ABSENSI, { 
                             method: "POST", 
@@ -281,29 +282,30 @@
                             let poinReal  = parseInt(hasilJson.realtime.poin) || 0;
                             let tandaMinus = saldoReal < 0 ? "-" : "";
 
+                            // Perbarui teks komponen pop-up secara langsung dari live sheet!
                             document.getElementById('pop-nominal-tabungan').innerText = tandaMinus + "Rp " + Math.abs(Math.round(saldoReal)).toLocaleString('id-ID');
                             
                             let pesan = "";
                             if (poinReal <= 1) {
-                                pesan = `👋 Halo ${santriDitemukan.nama}, ini baru kegiatan ke-${poinReal} kamu hari ini. Saldo tabunganmu ${tandaMinus}Rp ${Math.abs(Math.round(saldoReal)).toLocaleString('id-ID')}. Ayo kejar kegiatan berikutnya, jangan sampai bolos! ✨`;
+                                pesan = `👋 Halo ${santriDitemukan.nama}, ini baru kegiatan ke-${poinReal} kamu hari ini. Saldo tabunganmu ${tandaMinus}Rp ${Math.abs(Math.round(saldoReal)).toLocaleString('id-ID')}. Ayo kejar kegiatan berikutnya! ✨`;
                             } else if (poinReal >= 2 && poinReal <= 4) {
-                                pesan = `⚠️ Perhatian ${santriDitemukan.nama}! Kamu baru ikut ${poinReal} kegiatan hari ini. Ayo lebih semangat lagi ke masjid dan kelas agar poin harianmu maksimal! 💪`;
+                                pesan = `⚠️ Perhatian ${santriDitemukan.nama}! Kamu baru ikut ${poinReal} kegiatan hari ini. Ayo lebih semangat lagi ke masjid dan kelas! 💪`;
                             } else if (poinReal >= 5 && poinReal <= 14) {
                                 pesan = `⚡ Keren ${santriDitemukan.nama}! Sudah ${poinReal} kegiatan kamu ikuti hari ini. Pertahankan ritme ini sampai malam nanti ya! 🚀`;
                             } else {
-                                pesan = `🏆 Fantastis ${santriDitemukan.nama}! Hari ini kamu sangat produktif dengan mengikuti ${poinReal} kegiatan! Kamu teladan nyata hari ini, pertahankan! 🔥`;
+                                pesan = `🏆 Fantastis ${santriDitemukan.nama}! Hari ini kamu sangat produktif dengan mengikuti ${poinReal} kegiatan! Kamu teladan nyata hari ini! 🔥`;
                             }
                             document.getElementById('pop-pesan-motivasi').innerText = pesan;
                         } else {
                             document.getElementById('pop-nominal-tabungan').innerText = "Data Tertunda";
-                            document.getElementById('pop-pesan-motivasi').innerText = "Absen tercatat, server sedang memproses antrean kalkulasi keuangan.";
+                            document.getElementById('pop-pesan-motivasi').innerText = "Absen tercatat, antrean kalkulasi keuangan server sedang sibuk.";
                         }
                     } catch (e) {
                         document.getElementById('pop-nominal-tabungan').innerText = "Offline Terkirim";
                         document.getElementById('pop-pesan-motivasi').innerText = "Koneksi cloud terputus. Data disimpan secara lokal.";
                     }
 
-                    // TANGGUH & JEDA WAKTU: Menahan tampilan pop-up sukses tepat selama 5 DETIK (5000ms)
+                    // Tahan tampilan pop-up sukses total selama 5 detik
                     setTimeout(() => {
                         document.getElementById('pop-success').classList.add('hidden');
                         isProcessing = false; 
