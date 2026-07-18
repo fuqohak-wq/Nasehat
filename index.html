@@ -59,10 +59,8 @@
         </div>
     </div>
 
-    <!-- Canvas Tersembunyi untuk Proses Snapshot Foto -->
     <canvas id="canvas-capture" class="hidden"></canvas>
 
-    <!-- KUMPULAN TOMBOL NAVIGASI DILUAR MODAL -->
     <div class="w-full max-w-md mx-auto flex flex-col gap-2 mt-4">
         <a href="orangtua.html" class="w-full bg-rose-950 border border-rose-800 text-rose-300 font-black py-3.5 rounded-2xl text-xs uppercase text-center block tracking-wider shadow-md hover:bg-rose-900 transition-colors">
             <i class="fa-solid fa-heart animate-pulse mr-1"></i> Mode Orang Tua - Cek Foto Anak
@@ -88,7 +86,10 @@
     </div>
 
     <script>
-        const API_URL = "https://script.google.com/macros/s/AKfycbxJ8zjyd5YLsPhpq52ntO95-Bn5gNJlKLHSozMZ1kWFJAOGir5co21ln3gpiVI9UCx2/exec";
+        // KEDUA URL DIINTEGRASIKAN
+        const URL_ABSENSI = "https://script.google.com/macros/s/AKfycbxJ8zjyd5YLsPhpq52ntO95-Bn5gNJlKLHSozMZ1kWFJAOGir5co21ln3gpiVI9UCx2/exec";
+        const URL_TABUNGAN = "https://script.google.com/macros/s/AKfycbxVH7-d8GrgHjaDeT15az9zsHvwVedApP2IKBXl8ObIfexlmJG_-qCveSfmh7SL5cuX/exec";
+
         let video = document.getElementById('video-selfie');
         let label = document.getElementById('instruksi');
         let kotakScan = document.getElementById('kotak-scan');
@@ -116,7 +117,6 @@
         const CACHE_DB_TIME_KEY = 'cache_database_time';
         const DURASI_CACHE_DB = 6 * 60 * 60 * 1000; 
 
-        // Fungsi utility pembantu yang dimodifikasi untuk mempertahankan angka minus (-)
         function formatRupiah(angka) {
             if (angka === undefined || angka === null || isNaN(angka)) return "Rp 0";
             let nilaiAngka = parseFloat(angka);
@@ -145,7 +145,7 @@
             const cachedTime = localStorage.getItem(CACHE_DB_TIME_KEY);
 
             if (!paksaSinkron && cachedDb && cachedTime && (Date.now() - cachedTime < DURASI_CACHE_DB)) {
-                console.log("Menggunakan database santri dari Local Storage (Instan)...");
+                console.log("Menggunakan database dari Local Storage...");
                 databaseSantri = JSON.parse(cachedDb);
                 dbStatus.innerText = `🟢 Kiosk Ready (Cache: ${databaseSantri.length} Santri)`;
                 dbStatus.classList.remove('animate-pulse');
@@ -153,24 +153,43 @@
             }
 
             try {
-                dbStatus.innerText = "🔄 Menyelaraskan data...";
+                dbStatus.innerText = "🔄 Menyelaraskan 2 Cloud...";
                 dbStatus.classList.add('animate-pulse');
                 
-                const res = await fetch(`${API_URL}?aksi=ambil_database`, { method: "GET" });
-                const json = await res.json();
+                // Mengambil data dari kedua URL sekaligus secara realtime
+                const [resAbsen, resTabungan] = await Promise.all([
+                    fetch(`${URL_ABSENSI}?aksi=ambil_database`, { method: "GET" }),
+                    fetch(`${URL_TABUNGAN}?aksi=ambil_database`, { method: "GET" })
+                ]);
+
+                const jsonAbsen = await resAbsen.json();
+                const jsonTabungan = await resTabungan.json();
                 
-                if (json.status === "success") {
-                    databaseSantri = json.data;
+                if (jsonAbsen.status === "success" && jsonTabungan.status === "success") {
+                    // Mapping data tabungan ke database utama berdasarkan NIK agar akurat
+                    const mapTabungan = {};
+                    jsonTabungan.data.forEach(t => {
+                        if(t.nik) mapTabungan[t.nik.toString().trim()] = t.tabungan;
+                    });
+
+                    databaseSantri = jsonAbsen.data.map(santri => {
+                        let nikKey = santri.nik ? santri.nik.toString().trim() : "";
+                        return {
+                            ...santri,
+                            tabungan: mapTabungan[nikKey] !== undefined ? mapTabungan[nikKey] : 0
+                        };
+                    });
+
                     localStorage.setItem(CACHE_DB_KEY, JSON.stringify(databaseSantri));
                     localStorage.setItem(CACHE_DB_TIME_KEY, Date.now().toString());
                     
                     dbStatus.innerText = `🟢 Cloud Kiosk Ready (${databaseSantri.length} Santri)`;
                     dbStatus.classList.remove('animate-pulse');
                 } else {
-                    throw new Error("Respon server gagal");
+                    throw new Error("Respon salah satu server gagal");
                 }
             } catch (error) {
-                console.error("Gagal menyinkronkan database dari cloud:", error);
+                console.error("Gagal sinkron cloud:", error);
                 if (cachedDb) {
                     databaseSantri = JSON.parse(cachedDb);
                     dbStatus.innerText = `⚠️ Cloud Offline (Memakai Data Lokal)`;
@@ -219,16 +238,11 @@
                 canvasCap.width = video.videoWidth;
                 canvasCap.height = video.videoHeight;
                 const ctx = canvasCap.getContext('2d');
-                
                 ctx.translate(canvasCap.width, 0);
                 ctx.scale(-1, 1);
-                
                 ctx.drawImage(video, 0, 0, canvasCap.width, canvasCap.height);
                 return canvasCap.toDataURL('image/jpeg', 0.5);
-            } catch (error) {
-                console.error("Gagal mengambil foto:", error);
-                return "";
-            }
+            } catch (error) { return ""; }
         }
 
         async function verifikasiWajahLokal(descriptorKamera) {
@@ -237,23 +251,13 @@
 
             for (let santri of databaseSantri) {
                 try {
-                    if (GENDER_KIOSK !== "") {
-                        let genderSantri = santri.gender ? santri.gender.toString().trim().toUpperCase() : "";
-                        let matchesL = (GENDER_KIOSK === "L" && (genderSantri === "L" || genderSantri === "LAKI-LAKI"));
-                        let matchesP = (GENDER_KIOSK === "P" && (genderSantri === "P" || genderSantri === "PEREMPUAN"));
-                        if (!matchesL && !matchesP) continue;
-                    }
-
                     let dataVektorRaw = santri.vektor;
                     if(!dataVektorRaw) continue;
                     
                     let dataVektorArr = JSON.parse(dataVektorRaw);
                     let arrayVektorDb = Array.isArray(dataVektorArr) ? dataVektorArr : Object.values(dataVektorArr);
                     
-                    if(arrayVektorDb.length !== 128) continue; 
-
                     let jarakSains = faceapi.euclideanDistance(descriptorKamera, arrayVektorDb);
-
                     if (jarakSains < jarakTerkecil && jarakSains < AMBANG_BATAS_KETAT) { 
                         jarakTerkecil = jarakSains; 
                         santriDitemukan = santri; 
@@ -275,13 +279,11 @@
                     hitungKonsistensi = 0;
                     deteksiTerakhir = null;
 
-                    // TAMPILKAN DATA IDENTITAS KE WIDGET TABUNGAN KIOSK
                     lblNamaTabungan.innerText = santriDitemukan.nama ? santriDitemukan.nama.toUpperCase() : "NAMA SANTRI";
                     lblNikTabungan.innerText = santriDitemukan.nik || "-";
                     
-                    // Ambil nilai nominal tabungan dari database lokal
+                    // Saldo tabungan dari database gabungan
                     let nilaiSaldo_final = santriDitemukan.tabungan !== undefined ? santriDitemukan.tabungan : 0;
-                    
                     lblNominalTabungan.innerText = formatRupiah(nilaiSaldo_final);
                     widgetTabungan.classList.remove('hidden');
 
@@ -300,8 +302,6 @@
                         kotakScan.className = "w-64 h-64 border-4 border-solid border-amber-500 rounded-3xl flex items-center justify-center bg-amber-500/10";
                         
                         bunyikanBeep(440, 0.08);
-                        setTimeout(() => bunyikanBeep(440, 0.08), 120);
-
                         setTimeout(() => {
                             document.getElementById('pop-warning').classList.add('hidden');
                             widgetTabungan.classList.add('hidden'); 
@@ -321,7 +321,7 @@
                     };
 
                     try {
-                        let res = await fetch(API_URL, { 
+                        let res = await fetch(URL_ABSENSI, { 
                             method: "POST", 
                             headers: { "Content-Type": "text/plain;charset=utf-8" }, 
                             body: JSON.stringify(payload) 
@@ -333,9 +333,7 @@
                             document.getElementById('pop-success').classList.remove('hidden');
                             bunyikanBeep(1000, 0.25);
                         }
-                    } catch(e){
-                        console.error("Gagal melakukan pencatatan absensi ke cloud:", e);
-                    }
+                    } catch(e){}
                     
                     setTimeout(() => {
                         document.getElementById('pop-success').classList.add('hidden');
@@ -345,16 +343,13 @@
                         kotakScan.className = "w-64 h-64 border-4 border-dashed border-cyan-500/40 rounded-3xl flex items-center justify-center";
                     }, 4000);
                 }
-
             } else {
                 hitungKonsistensi = 0;
                 deteksiTerakhir = null;
-                
                 isProcessing = true; 
                 label.innerText = "WAJAH TIDAK DIKENAL";
                 kotakScan.className = "w-64 h-64 border-4 border-solid border-red-500 rounded-3xl flex items-center justify-center bg-red-500/10";
                 bunyikanBeep(220, 0.4);
-
                 setTimeout(() => { 
                     isProcessing = false;
                     label.innerText = "HADAPKAN WAJAH KE KAMERA"; 
