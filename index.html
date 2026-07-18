@@ -64,12 +64,9 @@
 
     <!-- KUMPULAN TOMBOL NAVIGASI DILUAR MODAL -->
     <div class="w-full max-w-md mx-auto flex flex-col gap-2 mt-4">
-        <!-- Tombol Khusus untuk Orang Tua (Menuju orangtua.html di repo yang sama) -->
         <a href="orangtua.html" class="w-full bg-rose-950 border border-rose-800 text-rose-300 font-black py-3.5 rounded-2xl text-xs uppercase text-center block tracking-wider shadow-md hover:bg-rose-900 transition-colors">
             <i class="fa-solid fa-heart animate-pulse mr-1"></i> Mode Orang Tua - Cek Foto Anak
         </a>
-        
-        <!-- Tombol Dashboard Bawaan Kiosk -->
         <a href="dashboard.html" class="w-full bg-slate-900 text-slate-400 font-bold py-3.5 rounded-2xl text-xs uppercase text-center block tracking-wider">
             Kembali ke Dashboard
         </a>
@@ -90,8 +87,8 @@
         </div>
     </div>
 
-<script>
-        // Inisialisasi Kedua URL Web App secara Terpisah
+    <script>
+        // Memisahkan URL Utama dengan URL Khusus Tabungan
         const API_URL = "https://script.google.com/macros/s/AKfycbxJ8zjyd5YLsPhpq52ntO95-Bn5gNJlKLHSozMZ1kWFJAOGir5co21ln3gpiVI9UCx2/exec";
         const API_TABUNGAN_URL = "https://script.google.com/macros/s/AKfycbxVH7-d8GrgHjaDeT15az9zsHvwVedApP2IKBXl8ObIfexlmJG_-qCveSfmh7SL5cuX/exec";
 
@@ -108,7 +105,7 @@
 
         let isProcessing = false;
         let databaseSantri = [];
-        let cacheSaldoTabungan = {}; 
+        let cacheSaldoTabungan = {}; // Penyimpanan RAM lokal untuk akses instan
 
         const AMBANG_BATAS_KETAT = 0.48;    
         const DETECTOR_INPUT_SIZE = 416;    
@@ -181,6 +178,7 @@
             }
         }
 
+        // Mengunduh peta saldo dari URL Kedua saat aplikasi startup secara paralel
         async function muatSaldoKeMemoriLokal() {
             try {
                 const res = await fetch(`${API_TABUNGAN_URL}?aksi=ambil_database`, { method: "GET" });
@@ -190,10 +188,10 @@
                     json.data.forEach(s => {
                         if(s.nik) cacheSaldoTabungan[s.nik.toString().trim()] = s.tabungan || 0;
                     });
-                    console.log("Data saldo berhasil dimuat ke memori lokal.");
+                    console.log("Sinkronisasi database saldo tabungan berhasil.");
                 }
             } catch (e) {
-                console.error("Gagal memuat saldo:", e);
+                console.error("Gagal memuat saldo tabungan:", e);
             }
         }
 
@@ -232,14 +230,14 @@
 
         function ambilSnapshotFoto() {
             try {
-                // Kompresi resolusi foto agar proses simpan ke sheet foto harian menjadi sangat cepat
+                // Kompresi resolusi foto ke 320x320 agar proses simpan log harian menjadi sangat cepat
                 canvasCap.width = 320; 
                 canvasCap.height = 320;
                 const ctx = canvasCap.getContext('2d');
                 ctx.translate(canvasCap.width, 0);
                 ctx.scale(-1, 1);
                 ctx.drawImage(video, 0, 0, canvasCap.width, canvasCap.height);
-                return canvasCap.toDataURL('image/jpeg', 0.35); 
+                return canvasCap.toDataURL('image/jpeg', 0.4); 
             } catch (error) {
                 return "";
             }
@@ -291,7 +289,7 @@
                     const hariIni = new Date().toISOString().split('T')[0]; 
                     const storageKey = `absen_${hariIni}_${nikBersih}_${kegiatan}`;
 
-                    // PROTEKSI ABSEN BERKALI-KALI (DIKEMBALIKAN KE LOGIKA UTAMA)
+                    // PROTEKSI ABSEN BERKALI-KALI
                     if (localStorage.getItem(storageKey)) {
                         document.getElementById('txt-nama-peringatan').innerText = santriDitemukan.nama.toUpperCase();
                         document.getElementById('pop-warning').classList.remove('hidden');
@@ -310,7 +308,7 @@
                         return;
                     }
 
-                    // TAMPILKAN DATA WIDGET TABUNGAN SECARA INSTAN
+                    // MENAMPILKAN DATA WIDGET TABUNGAN DARI MEMORI RAM SECARA INSTAN
                     const saldoInstan = cacheSaldoTabungan[nikBersih] !== undefined ? cacheSaldoTabungan[nikBersih] : 0;
                     lblNamaTabungan.innerText = santriDitemukan.nama ? santriDitemukan.nama.toUpperCase() : "NAMA SANTRI";
                     lblNikTabungan.innerText = santriDitemukan.nik || "-";
@@ -329,23 +327,21 @@
                         foto: dataFotoBase64
                     };
 
-                    // Kunci status absen lokal sebelum menembak server cloud
+                    // Kunci lokal segera diset agar sistem tidak dapat ditembus berulang kali
                     localStorage.setItem(storageKey, "TERCATAT");
 
                     document.getElementById('txt-nama-sukses').innerText = santriDitemukan.nama.toUpperCase();
                     document.getElementById('pop-success').classList.remove('hidden');
                     bunyikanBeep(1000, 0.25);
 
-                    // Pengiriman data absensi & foto dilakukan secara background tanpa memblokir UI browser
+                    // Pengiriman POST berjalan async di background sehingga tidak menunda feedback UI
                     fetch(API_URL, { 
                         method: "POST", 
                         headers: { "Content-Type": "text/plain;charset=utf-8" }, 
                         body: JSON.stringify(payload) 
                     }).then(res => res.json())
                       .then(r => {
-                          if(r.status !== "success") {
-                              localStorage.removeItem(storageKey); // Rollback jika server gagal total
-                          }
+                          if(r.status !== "success") { localStorage.removeItem(storageKey); }
                       })
                       .catch(e => console.error("Koneksi cloud tertunda:", e));
                     
