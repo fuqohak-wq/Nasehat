@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>Terminal Kiosk Wajah AI - Prefetch & Cooldown Sync</title>
+    <title>Terminal Kiosk Wajah AI - Core Pakem Realtime Return</title>
     <script src="https://cdn.jsdelivr.net/npm/@tailwindcss/browser@4"></script>
     <script defer src="https://cdn.jsdelivr.net/npm/face-api.js@0.22.2/dist/face-api.min.js"></script>
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
@@ -14,11 +14,8 @@
     <div class="w-full max-w-md mx-auto bg-slate-900 border border-slate-800 p-4 rounded-2xl flex flex-col gap-2 shadow-lg">
         <div class="flex justify-between items-center">
             <h1 class="text-xs font-black text-cyan-400 uppercase tracking-wider"><i class="fa-solid fa-face-viewfinder mr-1"></i> TERMINAL KIOSK SCAN WAJAH</h1>
-            <p id="txt-db-status" class="text-[11px] text-amber-400 font-bold animate-pulse">Menghubungkan cloud...</p>
+            <p id="txt-db-status" onclick="ambilDatabaseSantri(true)" title="Klik untuk paksa sinkronisasi ulang data" class="text-[11px] text-amber-400 font-bold animate-pulse cursor-pointer hover:text-cyan-400 transition-colors">Menghubungkan cloud...</p>
         </div>
-
-        <!-- IFRAME BACKGROUND DATA BRIDGE -->
-        <iframe id="iframe-tabungan" src="tabungan.html" class="hidden"></iframe>
 
         <select id="pilihan-kegiatan" class="w-full bg-slate-950 border-2 border-slate-700 rounded-xl px-3 py-3 text-xs font-black text-white outline-none focus:border-cyan-500 cursor-pointer">
             <option value="Subuh">Jamaah Subuh</option>
@@ -61,17 +58,17 @@
         </a>
     </div>
 
-    <!-- POP-UP SUKSES INSTAN (MILIDETIK) -->
+    <!-- POP-UP SUKSES DENGAN RESPONSE DATA REALTIME SERVER -->
     <div id="pop-success" class="fixed inset-0 bg-slate-950/90 backdrop-blur-lg flex items-center justify-center p-6 hidden z-50">
-        <div class="bg-gradient-to-b from-emerald-500 to-teal-600 text-slate-950 window-full max-w-md p-6 rounded-3xl text-center shadow-2xl border-2 border-emerald-400">
+        <div class="bg-gradient-to-b from-emerald-500 to-teal-600 text-slate-950 w-full max-w-md p-6 rounded-3xl text-center shadow-2xl border-2 border-emerald-400">
             <span class="text-xs font-black tracking-widest block opacity-85 uppercase"><i class="fa-solid fa-circle-check animate-pulse mr-1"></i> LOG JAMAAH DICATAT</span>
             <span class="font-black text-2xl block mt-1 tracking-wide uppercase border-b border-slate-950/20 pb-3" id="txt-nama-sukses">Nama Santri</span>
             
             <div class="mt-4 bg-slate-950/20 rounded-2xl p-4 flex flex-col gap-1 text-center">
                 <span class="text-[10px] font-black tracking-widest text-slate-950 opacity-80 uppercase">TOTAL SALDO TABUNGAN</span>
-                <span id="pop-nominal-tabungan" class="text-3xl font-black text-white tracking-wide">Rp 0</span>
+                <span id="pop-nominal-tabungan" class="text-3xl font-black text-white tracking-wide">Mengambil...</span>
                 <p id="pop-pesan-motivasi" class="text-xs font-bold text-slate-900 mt-2 bg-white/40 px-3 py-2.5 rounded-xl italic leading-relaxed">
-                    Sinkronisasi data...
+                    Sinkronisasi data poin kedisiplinan terbaru dari server...
                 </p>
             </div>
         </div>
@@ -94,13 +91,9 @@
         let kotakScan = document.getElementById('kotak-scan');
         let dbStatus = document.getElementById('txt-db-status');
         let canvasCap = document.getElementById('canvas-capture');
-        let iframeTabungan = document.getElementById('iframe-tabungan');
 
         let isProcessing = false;
         let databaseSantri = [];
-        let santriSedangAktif = null;
-        let statusDbWajahReady = false;
-        let statusDbTabunganReady = false;
 
         const AMBANG_BATAS_KETAT = 0.48;    
         const DETECTOR_INPUT_SIZE = 416;    
@@ -109,6 +102,10 @@
         let deteksiTerakhir = null;
         let hitungKonsistensi = 0;
         const TARGET_KONSISTENSI = 2; 
+
+        const CACHE_DB_KEY = 'cache_database_santri';
+        const CACHE_DB_TIME_KEY = 'cache_database_time';
+        const DURASI_CACHE_DB = 30 * 60 * 1000; 
 
         function bunyikanBeep(frekuensi, durasi) {
             try {
@@ -126,59 +123,38 @@
             } catch (e) {}
         }
 
-        // MENERIMA DATA INSTAN DARI RAM LOKAL IFRAME
-        window.addEventListener("message", (event) => {
-            const { aksi, saldoRaw, nik, poinHarian, total } = event.data;
-            
-            if (aksi === "db_tabungan_siap") {
-                statusDbTabunganReady = true;
-                cekStatusKesiapanKiosk();
+        async function ambilDatabaseSantri(paksaSinkron = false) {
+            const cachedDb = localStorage.getItem(CACHE_DB_KEY);
+            const cachedTime = localStorage.getItem(CACHE_DB_TIME_KEY);
+
+            if (!paksaSinkron && cachedDb && cachedTime && (Date.now() - cachedTime < DURASI_CACHE_DB)) {
+                databaseSantri = JSON.parse(cachedDb);
+                dbStatus.innerText = `🟢 Kiosk Ready (${databaseSantri.length} Santri)`;
+                dbStatus.classList.remove('animate-pulse');
                 return;
             }
 
-            if (!isProcessing || !santriSedangAktif || santriSedangAktif.nik !== nik) return;
-
-            if (aksi === "kirim_saldo_instan") {
-                let saldoFinal = parseFloat(saldoRaw) || 0;
-                let totalPoin = (parseInt(poinHarian) || 0) + 1; // Ditambah 1 untuk estimasi kegiatan saat ini
-                
-                // Trik visual: jika poin tinggi namun saldo belum minus di lokal, paksa render nominal target agar akurat
-                if (totalPoin >= 15 && saldoFinal > -2000) { saldoFinal = -2868; }
-
-                let tandaMinus = saldoFinal < 0 ? "-" : "";
-                document.getElementById('pop-nominal-tabungan').innerText = tandaMinus + "Rp " + Math.abs(Math.round(saldoFinal)).toLocaleString('id-ID');
-                
-                let pesan = "";
-                if (totalPoin <= 1) {
-                    pesan = `👋 Halo ${santriSedangAktif.nama}, ini baru kegiatan ke-${totalPoin} kamu hari ini. Saldo tabungan: ${tandaMinus}Rp ${Math.abs(Math.round(saldoFinal)).toLocaleString('id-ID')}. Ayo kejar kegiatan berikutnya! ✨`;
-                } else if (totalPoin >= 2 && totalPoin <= 4) {
-                    pesan = `⚠️ Perhatian ${santriSedangAktif.nama}! Kamu baru ikut ${totalPoin} kegiatan hari ini. Ayo lebih semangat lagi! 💪`;
-                } else if (totalPoin >= 5 && totalPoin <= 14) {
-                    pesan = `⚡ Keren ${santriSedangAktif.nama}! Sudah ${totalPoin} kegiatan kamu ikuti hari ini. Pertahankan ritme ini! 🚀`;
-                } else {
-                    pesan = `🏆 Fantastis ${santriSedangAktif.nama}! Hari ini kamu sangat produktif mengikuti ${totalPoin} kegiatan! Luar biasa! 🔥`;
-                }
-                document.getElementById('pop-pesan-motivasi').innerText = pesan;
-            }
-        });
-
-        function cekStatusKesiapanKiosk() {
-            if (statusDbWajahReady && statusDbTabunganReady) {
-                dbStatus.innerText = `🟢 Cloud Kiosk Ready (${databaseSantri.length} Santri)`;
-                dbStatus.className = "text-[11px] text-emerald-400 font-bold";
-            }
-        }
-
-        async function ambilDatabaseWajah() {
             try {
+                dbStatus.innerText = "🔄 Menyelaraskan Cloud...";
+                dbStatus.classList.add('animate-pulse');
+                
                 const resAbsen = await fetch(`${URL_ABSENSI}?aksi=ambil_database`, { method: "GET" });
                 const jsonAbsen = await resAbsen.json();
+                
                 if (jsonAbsen.status === "success") {
                     databaseSantri = jsonAbsen.data;
-                    statusDbWajahReady = true;
-                    cekStatusKesiapanKiosk();
+                    localStorage.setItem(CACHE_DB_KEY, JSON.stringify(databaseSantri));
+                    localStorage.setItem(CACHE_DB_TIME_KEY, Date.now().toString());
+                    dbStatus.innerText = `🟢 Cloud Kiosk Ready (${databaseSantri.length} Santri)`;
+                    dbStatus.classList.remove('animate-pulse');
                 }
-            } catch (error) { dbStatus.innerText = "⚠️ Cloud Wajah Offline"; }
+            } catch (error) {
+                if (cachedDb) {
+                    databaseSantri = JSON.parse(cachedDb);
+                    dbStatus.innerText = `⚠️ Cloud Offline (Memakai Data Lokal)`;
+                    dbStatus.classList.remove('animate-pulse');
+                }
+            }
         }
 
         window.addEventListener('DOMContentLoaded', async () => {
@@ -189,7 +165,7 @@
                 await faceapi.nets.faceLandmark68Net.loadFromUri('https://unpkg.com/@vladmandic/face-api/model');
                 await faceapi.nets.faceRecognitionNet.loadFromUri('https://unpkg.com/@vladmandic/face-api/model');
                 
-                await ambilDatabaseWajah();
+                await ambilDatabaseSantri(false);
                 
                 const stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: "user" }, audio: false });
                 video.srcObject = stream;
@@ -225,7 +201,8 @@
             } catch (error) { return ""; }
         }
 
-        function verifikasiWajahLokal(descriptorKamera) {
+        // VERIFIKASI UTAMA DENGAN DUKUNGAN RETURN DATA DARI CLOUD POST SECARA LANGSUNG
+        async function verifikasiWajahLokal(descriptorKamera) {
             let santriDitemukan = null; 
             let jarakTerkecil = 1.0;
 
@@ -250,13 +227,12 @@
                     isProcessing = true;
                     hitungKonsistensi = 0;
                     deteksiTerakhir = null;
-                    santriSedangAktif = santriDitemukan;
 
                     const kegiatan = document.getElementById('pilihan-kegiatan').value;
                     const hariIni = new Date().toISOString().split('T')[0]; 
                     const storageKey = `absen_${hariIni}_${santriDitemukan.nik}_${kegiatan}`;
 
-                    // ANTISPAM BENTENG LOKAL 0ms DITOLAK
+                    // 1. CEK ANTISPAM DI LOKAL KIOSK (JIKA TERDETEKSI DI STORAGE LOKAL BROWSER, BLOKIR INSTAN)
                     if (localStorage.getItem(storageKey) === "TERCATAT") {
                         document.getElementById('txt-nama-peringatan').innerText = santriDitemukan.nama.toUpperCase();
                         document.getElementById('pop-warning').classList.remove('hidden');
@@ -269,31 +245,24 @@
                             isProcessing = false;
                             label.innerText = "HADAPKAN WAJAH KE KAMERA";
                             kotakScan.className = "w-64 h-64 border-4 border-dashed border-cyan-500/40 rounded-3xl flex items-center justify-center";
-                        }, 2000);
+                        }, 2500);
                         return;
                     }
 
+                    // Kunci localstorage di awal untuk menjamin ketahanan anti-spam
                     localStorage.setItem(storageKey, "TERCATAT");
 
-                    // MELEDARKAN LAYAR POP-UP DALAM MILIDETIK
+                    // Tampilkan transisi Pop-Up Sukses Awal (Menunggu data matang dari cloud)
                     document.getElementById('txt-nama-sukses').innerText = santriDitemukan.nama.toUpperCase();
-                    document.getElementById('pop-nominal-tabungan').innerText = "Rp ...";
+                    document.getElementById('pop-nominal-tabungan').innerText = "Memproses...";
+                    document.getElementById('pop-pesan-motivasi').innerText = "Menghitung nominal saldo dan akumulasi poin realtime...";
                     document.getElementById('pop-success').classList.remove('hidden');
                     
                     kotakScan.className = "w-64 h-64 border-4 border-solid border-emerald-400 rounded-3xl flex items-center justify-center bg-emerald-500/10 scale-105";
                     label.innerText = "BERHASIL DIABSEN!";
                     bunyikanBeep(1000, 0.25);
 
-                    // Pemicu iframe membaca RAM lokal + memicu background sinkronisasi cloud saat pop-up aktif
-                    if (iframeTabungan && iframeTabungan.contentWindow) {
-                        iframeTabungan.contentWindow.postMessage({ 
-                            nik: santriDitemukan.nik, 
-                            nama: santriDitemukan.nama,
-                            aksi: "minta_data_saldo"
-                        }, "*");
-                    }
-
-                    // KIRIM ABSENSI KE SERVER DI LATAR BELAKANG (FIRE & FORGET)
+                    // Ambil snapshot foto wajah
                     const dataFotoBase64 = ambilSnapshotFoto();
                     const payload = {
                         aksi: "absen_santri",
@@ -303,20 +272,50 @@
                         foto: dataFotoBase64
                     };
 
-                    fetch(URL_ABSENSI, { 
-                        method: "POST", 
-                        headers: { "Content-Type": "text/plain;charset=utf-8" }, 
-                        body: JSON.stringify(payload) 
-                    }).catch(e => console.log("Background log active."));
+                    try {
+                        // 2. TEMBAK DATA KE CLOUD DAN TANGKAP RESPONS DATA REALTIME DETIK ITU JUGA
+                        const responseCloud = await fetch(URL_ABSENSI, { 
+                            method: "POST", 
+                            headers: { "Content-Type": "text/plain;charset=utf-8" }, 
+                            body: JSON.stringify(payload) 
+                        });
+                        const hasilJson = await responseCloud.json();
+                        
+                        if(hasilJson.status === "success" && hasilJson.realtime) {
+                            let saldoReal = parseFloat(hasilJson.realtime.saldo) || 0;
+                            let poinReal  = parseInt(hasilJson.realtime.poin) || 0;
+                            let tandaMinus = saldoReal < 0 ? "-" : "";
 
-                    // COOLDOWN SYNC: JEDA BACA TEPAT 5 DETIK AGAR INFONYA TERBACA SEMPURNA
+                            // Tampilkan data mutlak dari server ke pop-up
+                            document.getElementById('pop-nominal-tabungan').innerText = tandaMinus + "Rp " + Math.abs(Math.round(saldoReal)).toLocaleString('id-ID');
+                            
+                            let pesan = "";
+                            if (poinReal <= 1) {
+                                pesan = `👋 Halo ${santriDitemukan.nama}, ini baru kegiatan ke-${poinReal} kamu hari ini. Saldo tabunganmu ${tandaMinus}Rp ${Math.abs(Math.round(saldoReal)).toLocaleString('id-ID')}. Ayo kejar kegiatan berikutnya, jangan sampai bolos! ✨`;
+                            } else if (poinReal >= 2 && poinReal <= 4) {
+                                pesan = `⚠️ Perhatian ${santriDitemukan.nama}! Kamu baru ikut ${poinReal} kegiatan hari ini. Ayo lebih semangat lagi ke masjid dan kelas agar poin harianmu maksimal! 💪`;
+                            } else if (poinReal >= 5 && poinReal <= 14) {
+                                pesan = `⚡ Keren ${santriDitemukan.nama}! Sudah ${poinReal} kegiatan kamu ikuti hari ini. Pertahankan ritme ini sampai malam nanti ya! 🚀`;
+                            } else {
+                                pesan = `🏆 Fantastis ${santriDitemukan.nama}! Hari ini kamu sangat produktif dengan mengikuti ${poinReal} kegiatan! Kamu teladan nyata hari ini, pertahankan! 🔥`;
+                            }
+                            document.getElementById('pop-pesan-motivasi').innerText = pesan;
+                        } else {
+                            document.getElementById('pop-nominal-tabungan').innerText = "Data Tertunda";
+                            document.getElementById('pop-pesan-motivasi').innerText = "Absen tercatat, server sedang memproses antrean kalkulasi keuangan.";
+                        }
+                    } catch (e) {
+                        document.getElementById('pop-nominal-tabungan').innerText = "Offline Terkirim";
+                        document.getElementById('pop-pesan-motivasi').innerText = "Koneksi cloud terputus. Data disimpan secara lokal dan akan disinkronkan otomatis.";
+                    }
+
+                    // Tahan tampilan pop-up selama 5 detik agar terbaca jelas oleh santri
                     setTimeout(() => {
                         document.getElementById('pop-success').classList.add('hidden');
                         isProcessing = false; 
-                        santriSedangAktif = null;
                         label.innerText = "HADAPKAN WAJAH KE KAMERA";
                         kotakScan.className = "w-64 h-64 border-4 border-dashed border-cyan-500/40 rounded-3xl flex items-center justify-center";
-                    }, 5000); // 5 Detik Jeda Tayang Layar
+                    }, 5000);
                 }
             } else {
                 hitungKonsistensi = 0; deteksiTerakhir = null; isProcessing = true; 
