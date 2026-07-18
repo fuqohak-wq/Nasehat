@@ -1,37 +1,42 @@
 <!DOCTYPE html>
-<html>
+<html lang="id">
 <head>
+    <meta charset="UTF-8">
+    <script src="https://cdn.jsdelivr.net/npm/@tailwindcss/browser@4"></script>
+</head>
+<body class="bg-transparent overflow-hidden text-slate-100">
     <script>
         const API_TABUNGAN = "https://script.google.com/macros/s/AKfycbxVH7-d8GrgHjaDeT15az9zsHvwVedApP2IKBXl8ObIfexlmJG_-qCveSfmh7SL5cuX/exec";
         let listSaldoLokal = [];
 
-        async function unduhData() {
+        async function unduhSemuaSaldo() {
             try {
                 const res = await fetch(`${API_TABUNGAN}?aksi=ambil_database`);
                 const json = await res.json();
-                if (json.status === "success") {
-                    listSaldoLokal = json.data;
-                }
-            } catch (e) {}
+                if (json.status === "success") { listSaldoLokal = json.data; }
+            } catch (e) { console.error("Gagal sinkron data", e); }
         }
 
         window.addEventListener("message", (event) => {
-            const { nik, aksi } = event.data;
+            const { nik, nama, aksi } = event.data;
             if (aksi === "minta_data_saldo" && nik) {
-                // Cari cepat dengan .find()
-                let data = listSaldoLokal.find(s => String(s.nik).trim() === String(nik).trim());
+                let target = listSaldoLokal.find(s => s.nik?.toString().trim() === nik.toString().trim());
+                // Pastikan nilai absolut (PLUS)
+                let saldoFinal = target ? Math.abs(parseFloat(target.tabungan)) : 0;
+                let poinHariIni = target ? Math.abs(parseInt(target.poin)) : 0;
+
                 window.parent.postMessage({
                     aksi: "kirim_saldo_ke_pop",
-                    saldoRaw: data ? data.tabungan : 0,
-                    poinHarian: data ? data.poin : 0,
-                    nik: nik
+                    saldoRaw: saldoFinal,
+                    nama: nama,
+                    nik: nik,
+                    poinHarian: poinHariIni
                 }, "*");
             }
         });
 
-        unduhData();
-        setInterval(unduhData, 5 * 60 * 1000); // Sync tiap 5 menit
+        unduhSemuaSaldo();
+        setInterval(unduhSemuaSaldo, 3 * 60 * 1000); // Percepat sinkron tiap 3 menit
     </script>
-</head>
-<body></body>
+</body>
 </html>
