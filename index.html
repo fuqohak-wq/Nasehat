@@ -64,9 +64,12 @@
 
     <!-- KUMPULAN TOMBOL NAVIGASI DILUAR MODAL -->
     <div class="w-full max-w-md mx-auto flex flex-col gap-2 mt-4">
+        <!-- Tombol Khusus untuk Orang Tua (Menuju orangtua.html di repo yang sama) -->
         <a href="orangtua.html" class="w-full bg-rose-950 border border-rose-800 text-rose-300 font-black py-3.5 rounded-2xl text-xs uppercase text-center block tracking-wider shadow-md hover:bg-rose-900 transition-colors">
             <i class="fa-solid fa-heart animate-pulse mr-1"></i> Mode Orang Tua - Cek Foto Anak
         </a>
+        
+        <!-- Tombol Dashboard Bawaan Kiosk -->
         <a href="dashboard.html" class="w-full bg-slate-900 text-slate-400 font-bold py-3.5 rounded-2xl text-xs uppercase text-center block tracking-wider">
             Kembali ke Dashboard
         </a>
@@ -87,8 +90,8 @@
         </div>
     </div>
 
-    <script>
-        // Memisahkan URL Utama dengan URL Khusus Tabungan
+<script>
+        // 1. Inisialisasi Kedua URL Web App secara Terpisah
         const API_URL = "https://script.google.com/macros/s/AKfycbxJ8zjyd5YLsPhpq52ntO95-Bn5gNJlKLHSozMZ1kWFJAOGir5co21ln3gpiVI9UCx2/exec";
         const API_TABUNGAN_URL = "https://script.google.com/macros/s/AKfycbxVH7-d8GrgHjaDeT15az9zsHvwVedApP2IKBXl8ObIfexlmJG_-qCveSfmh7SL5cuX/exec";
 
@@ -98,6 +101,7 @@
         let dbStatus = document.getElementById('txt-db-status');
         let canvasCap = document.getElementById('canvas-capture');
         
+        // Target Element Widget Tabungan
         let widgetTabungan = document.getElementById('widget-tabungan-santri');
         let lblNamaTabungan = document.getElementById('label-nama-tabungan');
         let lblNikTabungan = document.getElementById('label-nik-tabungan');
@@ -105,11 +109,11 @@
 
         let isProcessing = false;
         let databaseSantri = [];
-        let cacheSaldoTabungan = {}; // Penyimpanan RAM lokal untuk akses instan
 
         const AMBANG_BATAS_KETAT = 0.48;    
         const DETECTOR_INPUT_SIZE = 416;    
         const DETECTOR_SCORE_THRESH = 0.5;  
+        
         const GENDER_KIOSK = ""; 
 
         let deteksiTerakhir = null;
@@ -120,6 +124,7 @@
         const CACHE_DB_TIME_KEY = 'cache_database_time';
         const DURASI_CACHE_DB = 6 * 60 * 60 * 1000; 
 
+        // Fungsi utility pembantu untuk format mata uang rupiah standar
         function formatRupiah(angka) {
             if (angka === undefined || angka === null || isNaN(angka)) return "Rp 0";
             return "Rp " + parseInt(angka).toLocaleString('id-ID');
@@ -146,15 +151,15 @@
             const cachedTime = localStorage.getItem(CACHE_DB_TIME_KEY);
 
             if (!paksaSinkron && cachedDb && cachedTime && (Date.now() - cachedTime < DURASI_CACHE_DB)) {
+                console.log("Menggunakan database santri dari Local Storage (Instan)...");
                 databaseSantri = JSON.parse(cachedDb);
-                dbStatus.innerText = `🟢 Kiosk Ready (Lokal: ${databaseSantri.length} Santri)`;
+                dbStatus.innerText = `🟢 Kiosk Ready (Cache: ${databaseSantri.length} Santri)`;
                 dbStatus.classList.remove('animate-pulse');
-                muatSaldoKeMemoriLokal();
                 return;
             }
 
             try {
-                dbStatus.innerText = "🔄 Menghubungkan cloud...";
+                dbStatus.innerText = "🔄 Menyelaraskan data...";
                 dbStatus.classList.add('animate-pulse');
                 
                 const res = await fetch(`${API_URL}?aksi=ambil_database`, { method: "GET" });
@@ -164,34 +169,21 @@
                     databaseSantri = json.data;
                     localStorage.setItem(CACHE_DB_KEY, JSON.stringify(databaseSantri));
                     localStorage.setItem(CACHE_DB_TIME_KEY, Date.now().toString());
+                    
                     dbStatus.innerText = `🟢 Cloud Kiosk Ready (${databaseSantri.length} Santri)`;
                     dbStatus.classList.remove('animate-pulse');
+                } else {
+                    throw new Error("Respon server gagal");
                 }
-                await muatSaldoKeMemoriLokal();
             } catch (error) {
-                console.error("Gagal sinkron database:", error);
+                console.error("Gagal menyinkronkan database dari cloud:", error);
                 if (cachedDb) {
                     databaseSantri = JSON.parse(cachedDb);
-                    dbStatus.innerText = `⚠️ Mode Offline`;
+                    dbStatus.innerText = `⚠️ Cloud Offline (Memakai Data Lokal)`;
                     dbStatus.classList.remove('animate-pulse');
+                } else {
+                    dbStatus.innerText = "🔴 Cloud Putus & Cache Kosong";
                 }
-            }
-        }
-
-        // Mengunduh peta saldo dari URL Kedua saat aplikasi startup secara paralel
-        async function muatSaldoKeMemoriLokal() {
-            try {
-                const res = await fetch(`${API_TABUNGAN_URL}?aksi=ambil_database`, { method: "GET" });
-                const json = await res.json();
-                if (json.status === "success" && Array.isArray(json.data)) {
-                    cacheSaldoTabungan = {};
-                    json.data.forEach(s => {
-                        if(s.nik) cacheSaldoTabungan[s.nik.toString().trim()] = s.tabungan || 0;
-                    });
-                    console.log("Sinkronisasi database saldo tabungan berhasil.");
-                }
-            } catch (e) {
-                console.error("Gagal memuat saldo tabungan:", e);
             }
         }
 
@@ -224,21 +216,23 @@
                         hitungKonsistensi = 0;
                         deteksiTerakhir = null;
                     }
-                }, 300);
+                }, 400);
             } catch (e) { label.innerText = "AI OFFLINE"; }
         });
 
         function ambilSnapshotFoto() {
             try {
-                // Kompresi resolusi foto ke 320x320 agar proses simpan log harian menjadi sangat cepat
-                canvasCap.width = 320; 
-                canvasCap.height = 320;
+                canvasCap.width = video.videoWidth;
+                canvasCap.height = video.videoHeight;
                 const ctx = canvasCap.getContext('2d');
+                
                 ctx.translate(canvasCap.width, 0);
                 ctx.scale(-1, 1);
+                
                 ctx.drawImage(video, 0, 0, canvasCap.width, canvasCap.height);
-                return canvasCap.toDataURL('image/jpeg', 0.4); 
+                return canvasCap.toDataURL('image/jpeg', 0.5);
             } catch (error) {
+                console.error("Gagal mengambil foto:", error);
                 return "";
             }
         }
@@ -247,8 +241,7 @@
             let santriDitemukan = null; 
             let jarakTerkecil = 1.0;
 
-            for (let i = 0; i < databaseSantri.length; i++) {
-                let santri = databaseSantri[i];
+            for (let santri of databaseSantri) {
                 try {
                     if (GENDER_KIOSK !== "") {
                         let genderSantri = santri.gender ? santri.gender.toString().trim().toUpperCase() : "";
@@ -260,7 +253,11 @@
                     let dataVektorRaw = santri.vektor;
                     if(!dataVektorRaw) continue;
                     
-                    let arrayVektorDb = JSON.parse(dataVektorRaw);
+                    let dataVektorArr = JSON.parse(dataVektorRaw);
+                    let arrayVektorDb = Array.isArray(dataVektorArr) ? dataVektorArr : Object.values(dataVektorArr);
+                    
+                    if(arrayVektorDb.length !== 128) continue; 
+
                     let jarakSains = faceapi.euclideanDistance(descriptorKamera, arrayVektorDb);
 
                     if (jarakSains < jarakTerkecil && jarakSains < AMBANG_BATAS_KETAT) { 
@@ -284,12 +281,39 @@
                     hitungKonsistensi = 0;
                     deteksiTerakhir = null;
 
-                    const nikBersih = santriDitemukan.nik.toString().trim();
+                    // TAMPILKAN WIDGET DAN LOAD SALDO SECARA REALTIME DARI URL KEDUA
+                    lblNamaTabungan.innerText = santriDitemukan.nama ? santriDitemukan.nama.toUpperCase() : "NAMA SANTRI";
+                    lblNikTabungan.innerText = santriDitemukan.nik || "-";
+                    lblNominalTabungan.innerText = "Memuat...";
+                    widgetTabungan.classList.remove('hidden');
+
+                    fetch(`${API_TABUNGAN_URL}?aksi=ambil_database`)
+                        .then(res => res.json())
+                        .then(json => {
+                            if (json.status === "success" && Array.isArray(json.data)) {
+                                const matchedSantri = json.data.find(s => s.nik.toString().trim() === santriDitemukan.nik.toString().trim());
+                                if (matchedSantri) {
+                                    lblNominalTabungan.innerText = formatRupiah(matchedSantri.tabungan);
+                                } else {
+                                    lblNominalTabungan.innerText = "Rp 0";
+                                }
+                            } else {
+                                lblNominalTabungan.innerText = "Rp 0";
+                            }
+                        })
+                        .catch(err => {
+                            console.error("Gagal mengambil saldo tabungan:", err);
+                            lblNominalTabungan.innerText = "Error Jaringan";
+                        });
+
+                    kotakScan.className = "w-64 h-64 border-4 border-solid border-emerald-400 rounded-3xl flex items-center justify-center bg-emerald-500/10 scale-105";
+                    label.innerText = "MENCOCOKKAN BIOMETRIK...";
+
+                    const dataFotoBase64 = ambilSnapshotFoto();
                     const kegiatan = document.getElementById('pilihan-kegiatan').value;
                     const hariIni = new Date().toISOString().split('T')[0]; 
-                    const storageKey = `absen_${hariIni}_${nikBersih}_${kegiatan}`;
+                    const storageKey = `absen_${hariIni}_${santriDitemukan.nik}_${kegiatan}`;
 
-                    // PROTEKSI ABSEN BERKALI-KALI
                     if (localStorage.getItem(storageKey)) {
                         document.getElementById('txt-nama-peringatan').innerText = santriDitemukan.nama.toUpperCase();
                         document.getElementById('pop-warning').classList.remove('hidden');
@@ -301,6 +325,7 @@
 
                         setTimeout(() => {
                             document.getElementById('pop-warning').classList.add('hidden');
+                            widgetTabungan.classList.add('hidden');
                             isProcessing = false;
                             label.innerText = "HADAPKAN WAJAH KE KAMERA";
                             kotakScan.className = "w-64 h-64 border-4 border-dashed border-cyan-500/40 rounded-3xl flex items-center justify-center";
@@ -308,17 +333,6 @@
                         return;
                     }
 
-                    // MENAMPILKAN DATA WIDGET TABUNGAN DARI MEMORI RAM SECARA INSTAN
-                    const saldoInstan = cacheSaldoTabungan[nikBersih] !== undefined ? cacheSaldoTabungan[nikBersih] : 0;
-                    lblNamaTabungan.innerText = santriDitemukan.nama ? santriDitemukan.nama.toUpperCase() : "NAMA SANTRI";
-                    lblNikTabungan.innerText = santriDitemukan.nik || "-";
-                    lblNominalTabungan.innerText = formatRupiah(saldoInstan);
-                    widgetTabungan.classList.remove('hidden');
-
-                    kotakScan.className = "w-64 h-64 border-4 border-solid border-emerald-400 rounded-3xl flex items-center justify-center bg-emerald-500/10 scale-105";
-                    label.innerText = "MENCOCOKKAN BIOMETRIK...";
-
-                    const dataFotoBase64 = ambilSnapshotFoto();
                     const payload = {
                         aksi: "absen_santri",
                         nik: santriDitemukan.nik,
@@ -327,23 +341,22 @@
                         foto: dataFotoBase64
                     };
 
-                    // Kunci lokal segera diset agar sistem tidak dapat ditembus berulang kali
-                    localStorage.setItem(storageKey, "TERCATAT");
-
-                    document.getElementById('txt-nama-sukses').innerText = santriDitemukan.nama.toUpperCase();
-                    document.getElementById('pop-success').classList.remove('hidden');
-                    bunyikanBeep(1000, 0.25);
-
-                    // Pengiriman POST berjalan async di background sehingga tidak menunda feedback UI
-                    fetch(API_URL, { 
-                        method: "POST", 
-                        headers: { "Content-Type": "text/plain;charset=utf-8" }, 
-                        body: JSON.stringify(payload) 
-                    }).then(res => res.json())
-                      .then(r => {
-                          if(r.status !== "success") { localStorage.removeItem(storageKey); }
-                      })
-                      .catch(e => console.error("Koneksi cloud tertunda:", e));
+                    try {
+                        let res = await fetch(API_URL, { 
+                            method: "POST", 
+                            headers: { "Content-Type": "text/plain;charset=utf-8" }, 
+                            body: JSON.stringify(payload) 
+                        });
+                        let r = await res.json();
+                        if(r.status === "success") {
+                            localStorage.setItem(storageKey, "TERCATAT");
+                            document.getElementById('txt-nama-sukses').innerText = santriDitemukan.nama.toUpperCase();
+                            document.getElementById('pop-success').classList.remove('hidden');
+                            bunyikanBeep(1000, 0.25);
+                        }
+                    } catch(e){
+                        console.error("Gagal melakukan pencatatan absensi ke cloud:", e);
+                    }
                     
                     setTimeout(() => {
                         document.getElementById('pop-success').classList.add('hidden');
