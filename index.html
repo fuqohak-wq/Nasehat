@@ -10,11 +10,25 @@
 </head>
 <body class="bg-slate-950 text-slate-100 min-h-screen flex flex-col justify-between p-4">
 
+    <!-- CONTAINER WIDGET INFORMASI UTAMA & INTEGRASI SALDO TABUNGAN -->
     <div class="w-full max-w-md mx-auto bg-slate-900 border border-slate-800 p-4 rounded-2xl flex flex-col gap-2 shadow-lg">
         <div class="flex justify-between items-center">
             <h1 class="text-xs font-black text-cyan-400 uppercase tracking-wider"><i class="fa-solid fa-face-viewfinder mr-1"></i> TERMINAL KIOSK SCAN WAJAH</h1>
             <p id="txt-db-status" onclick="ambilDatabaseSantri(true)" title="Klik untuk paksa sinkronisasi ulang data" class="text-[11px] text-amber-400 font-bold animate-pulse cursor-pointer hover:text-cyan-400 transition-colors">Menghubungkan cloud...</p>
         </div>
+
+        <!-- WIDGET INTEGRASI AUTO-TABUNGAN SANTRI (OTOMATIS MUNCUL SAAT ABSEN BERHASIL) -->
+        <div id="widget-tabungan-santri" class="hidden transition-all duration-300 w-full mt-1 bg-slate-950/80 border border-cyan-500/30 rounded-xl p-3 flex justify-between items-center bg-gradient-to-r from-slate-950 to-cyan-950/20">
+            <div class="flex flex-col gap-0.5">
+                <span id="label-nama-tabungan" class="text-[11px] font-black tracking-wide text-white uppercase line-clamp-1">NAMA SANTRI</span>
+                <span class="text-[9px] font-bold text-slate-400 tracking-wider"><i class="fa-solid fa-address-card text-cyan-500/70 mr-0.5"></i> NIK: <span id="label-nik-tabungan">-</span></span>
+            </div>
+            <div class="text-right flex flex-col justify-center">
+                <span class="text-[9px] font-black tracking-widest text-cyan-400 uppercase">SALDO TABUNGAN</span>
+                <span id="label-nominal-tabungan" class="text-base font-black text-emerald-400 tracking-wide">Rp 0</span>
+            </div>
+        </div>
+
         <select id="pilihan-kegiatan" class="w-full bg-slate-950 border-2 border-slate-700 rounded-xl px-3 py-3 text-xs font-black text-white outline-none focus:border-cyan-500 cursor-pointer">
             <option value="Subuh">Jamaah Subuh</option>
             <option value="Dzuhur">Jamaah Dzuhur</option>
@@ -83,6 +97,13 @@
         let kotakScan = document.getElementById('kotak-scan');
         let dbStatus = document.getElementById('txt-db-status');
         let canvasCap = document.getElementById('canvas-capture');
+        
+        // Target Element Widget Tabungan
+        let widgetTabungan = document.getElementById('widget-tabungan-santri');
+        let lblNamaTabungan = document.getElementById('label-nama-tabungan');
+        let lblNikTabungan = document.getElementById('label-nik-tabungan');
+        let lblNominalTabungan = document.getElementById('label-nominal-tabungan');
+
         let isProcessing = false;
         let databaseSantri = [];
 
@@ -99,6 +120,12 @@
         const CACHE_DB_KEY = 'cache_database_santri';
         const CACHE_DB_TIME_KEY = 'cache_database_time';
         const DURASI_CACHE_DB = 6 * 60 * 60 * 1000; 
+
+        // Fungsi utility pembantu untuk format mata uang rupiah standar
+        function formatRupiah(angka) {
+            if (angka === undefined || angka === null || isNaN(angka)) return "Rp 0";
+            return "Rp " + parseInt(angka).toLocaleString('id-ID');
+        }
 
         function bunyikanBeep(frekuensi, durasi) {
             try {
@@ -158,7 +185,6 @@
         }
 
         window.addEventListener('DOMContentLoaded', async () => {
-            // Pengaman sesi halaman internal kiosk bawaan sistem Anda
             if (!localStorage.getItem('session_nama')) { localStorage.setItem('session_nama', 'KIOSK_MANDIRI'); }
             
             try {
@@ -197,12 +223,11 @@
                 canvasCap.height = video.videoHeight;
                 const ctx = canvasCap.getContext('2d');
                 
-                // Melakukan mirror horizontal agar hasil tangkapan foto searah dengan pandangan mata
                 ctx.translate(canvasCap.width, 0);
                 ctx.scale(-1, 1);
                 
                 ctx.drawImage(video, 0, 0, canvasCap.width, canvasCap.height);
-                return canvasCap.toDataURL('image/jpeg', 0.5); // Kompresi kualitas gambar 50% untuk efisiensi penyimpanan Cloud
+                return canvasCap.toDataURL('image/jpeg', 0.5);
             } catch (error) {
                 console.error("Gagal mengambil foto:", error);
                 return "";
@@ -253,6 +278,14 @@
                     hitungKonsistensi = 0;
                     deteksiTerakhir = null;
 
+                    // EKSEKUSI INTEGRASI: Tampilkan data nominal saldo tabungan otomatis di menu widget atas
+                    lblNamaTabungan.innerText = santriDitemukan.nama ? santriDitemukan.nama.toUpperCase() : "NAMA SANTRI";
+                    lblNikTabungan.innerText = santriDitemukan.nik || "-";
+                    // Membaca field 'tabungan' atau 'saldo' (sesuai header kolom JUMLAH TABUNGAN dari database cloud Anda)
+                    let nilaiSaldo = santriDitemukan.tabungan || santriDitemukan.saldo || 0;
+                    lblNominalTabungan.innerText = formatRupiah(nilaiSaldo);
+                    widgetTabungan.classList.remove('hidden');
+
                     kotakScan.className = "w-64 h-64 border-4 border-solid border-emerald-400 rounded-3xl flex items-center justify-center bg-emerald-500/10 scale-105";
                     label.innerText = "MENCOCOKKAN BIOMETRIK...";
 
@@ -272,6 +305,7 @@
 
                         setTimeout(() => {
                             document.getElementById('pop-warning').classList.add('hidden');
+                            widgetTabungan.classList.add('hidden'); // Sembunyikan kembali informasi tabungan
                             isProcessing = false;
                             label.innerText = "HADAPKAN WAJAH KE KAMERA";
                             kotakScan.className = "w-64 h-64 border-4 border-dashed border-cyan-500/40 rounded-3xl flex items-center justify-center";
@@ -279,7 +313,6 @@
                         return;
                     }
 
-                    // PERBAIKAN UTAMA: Mengirim data menggunakan struktur JSON Payload Mentah (Membantu penanganan doPost pada code.gs Anda)
                     const payload = {
                         aksi: "absen_santri",
                         nik: santriDitemukan.nik,
@@ -307,10 +340,11 @@
                     
                     setTimeout(() => {
                         document.getElementById('pop-success').classList.add('hidden');
+                        widgetTabungan.classList.add('hidden'); // Sembunyikan kembali informasi tabungan
                         isProcessing = false; 
                         label.innerText = "HADAPKAN WAJAH KE KAMERA";
                         kotakScan.className = "w-64 h-64 border-4 border-dashed border-cyan-500/40 rounded-3xl flex items-center justify-center";
-                    }, 2000);
+                    }, 3500); // Waktu diperpanjang sedikit ke 3.5 detik agar santri sempat membaca nominal tabungannya
                 }
 
             } else {
