@@ -4,7 +4,6 @@
     <meta charset="UTF-8">
 </head>
 <body class="bg-transparent overflow-hidden text-slate-100">
-
     <script>
         const API_TABUNGAN = "https://script.google.com/macros/s/AKfycbxVH7-d8GrgHjaDeT15az9zsHvwVedApP2IKBXl8ObIfexlmJG_-qCveSfmh7SL5cuX/exec";
         let listSaldoLokal = [];
@@ -13,10 +12,8 @@
             try {
                 const res = await fetch(`${API_TABUNGAN}?aksi=ambil_database`, { method: "GET" });
                 const json = await res.json();
-                if (json.status === "success") {
-                    listSaldoLokal = json.data;
-                }
-            } catch (e) { console.error("Tabungan Sync Offline", e); }
+                if (json.status === "success") { listSaldoLokal = json.data; }
+            } catch (e) { console.error("Tabungan Offline Sync", e); }
         }
 
         window.addEventListener("message", (event) => {
@@ -39,7 +36,7 @@
         });
 
         unduhSemuaSaldo();
-        setInterval(unduhSemuaSaldo, 3 * 60 * 1000); // Update data latar belakang tiap 3 minut
+        setInterval(unduhSemuaSaldo, 3 * 60 * 1000); // Sinkronisasi latar belakang tiap 3 menit
     </script>
 </body>
 </html>
