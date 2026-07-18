@@ -4,7 +4,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
     <title>Terminal Kiosk Wajah AI - Core Pakem Standar Industri</title>
-    <script src="https://cdn.jsdelivr.net/npfunction formatRupim/@tailwindcss/browser@4"></script>
+    <script src="https://cdn.jsdelivr.net/npm/@tailwindcss/browser@4"></script>
     <script defer src="https://cdn.jsdelivr.net/npm/face-api.js@0.22.2/dist/face-api.min.js"></script>
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
 </head>
@@ -117,13 +117,13 @@
         const DURASI_CACHE_DB = 6 * 60 * 60 * 1000; 
 
         // Fungsi utility pembantu yang dimodifikasi untuk mempertahankan angka minus (-)
-function formatRupiah(angka) {
-    if (angka === undefined || angka === null || isNaN(angka)) return "Rp 0";
-    let nilaiAngka = parseFloat(angka);
-    let tandaMinus = nilaiAngka < 0 ? "-" : "";
-    // Menggunakan Math.abs agar nominal di dalam Rp selalu positif, minus ditaruh di paling depan
-    return tandaMinus + "Rp " + Math.abs(Math.round(nilaiAngka)).toLocaleString('id-ID');
-}
+        function formatRupiah(angka) {
+            if (angka === undefined || angka === null || isNaN(angka)) return "Rp 0";
+            let nilaiAngka = parseFloat(angka);
+            let tandaMinus = nilaiAngka < 0 ? "-" : "";
+            return tandaMinus + "Rp " + Math.abs(Math.round(nilaiAngka)).toLocaleString('id-ID');
+        }
+
         function bunyikanBeep(frekuensi, durasi) {
             try {
                 const audioCtx = new (window.AudioContext || window.webkitAudioContext)();
@@ -270,26 +270,23 @@ function formatRupiah(angka) {
                     return;
                 }
 
-if (hitungKonsistensi >= TARGET_KONSISTENSI) {
-    isProcessing = true;
-    hitungKonsistensi = 0;
-    deteksiTerakhir = null;
+                if (hitungKonsistensi >= TARGET_KONSISTENSI) {
+                    isProcessing = true;
+                    hitungKonsistensi = 0;
+                    deteksiTerakhir = null;
 
-    // TAMPILKAN DATA IDENTITAS KE WIDGET TABUNGAN KIOSK
-    lblNamaTabungan.innerText = santriDitemukan.nama ? santriDitemukan.nama.toUpperCase() : "NAMA SANTRI";
-    lblNikTabungan.innerText = santriDitemukan.nik || "-";
-    
-    // Tembak langsung nilai tabungan dari array terunduh local storage
-    let nilaiSaldo final = santriDitemukan.tabungan;
-    
-    // Tampilkan secara paksa ke layar widget HTML
-    lblNominalTabungan.innerText = formatRupiah(nilaiSaldo_final);
-    widgetTabungan.classList.remove('hidden');
+                    // TAMPILKAN DATA IDENTITAS KE WIDGET TABUNGAN KIOSK
+                    lblNamaTabungan.innerText = santriDitemukan.nama ? santriDitemukan.nama.toUpperCase() : "NAMA SANTRI";
+                    lblNikTabungan.innerText = santriDitemukan.nik || "-";
+                    
+                    // Ambil nilai nominal tabungan dari database lokal
+                    let nilaiSaldo_final = santriDitemukan.tabungan !== undefined ? santriDitemukan.tabungan : 0;
+                    
+                    lblNominalTabungan.innerText = formatRupiah(nilaiSaldo_final);
+                    widgetTabungan.classList.remove('hidden');
 
-    kotakScan.className = "w-64 h-64 border-4 border-solid border-emerald-400 rounded-3xl flex items-center justify-center bg-emerald-500/10 scale-105";
-    label.innerText = "MENCOCOKKAN BIOMETRIK...";
-    
-    // Sisa kode absensi ke bawah tetap dibiarkan seperti bawaan Anda...
+                    kotakScan.className = "w-64 h-64 border-4 border-solid border-emerald-400 rounded-3xl flex items-center justify-center bg-emerald-500/10 scale-105";
+                    label.innerText = "MENCOCOKKAN BIOMETRIK...";
 
                     const dataFotoBase64 = ambilSnapshotFoto();
                     const kegiatan = document.getElementById('pilihan-kegiatan').value;
@@ -346,7 +343,7 @@ if (hitungKonsistensi >= TARGET_KONSISTENSI) {
                         isProcessing = false; 
                         label.innerText = "HADAPKAN WAJAH KE KAMERA";
                         kotakScan.className = "w-64 h-64 border-4 border-dashed border-cyan-500/40 rounded-3xl flex items-center justify-center";
-                    }, 4000); // Waktu diatur 4 detik agar santri sempat membaca nominal tabungannya
+                    }, 4000);
                 }
 
             } else {
