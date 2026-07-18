@@ -1,0 +1,127 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Kangen Santri - Pantau Foto Harian Anak</title>
+    <script src="https://cdn.jsdelivr.net/npm/@tailwindcss/browser@4"></script>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+</head>
+<body class="bg-slate-950 text-slate-100 min-h-screen p-4 flex flex-col justify-start">
+
+    <div class="w-full max-w-2xl mx-auto bg-slate-900 border border-slate-800 p-6 rounded-3xl shadow-xl mb-6">
+        <div class="text-center mb-6">
+            <h1 class="text-lg font-black text-cyan-400 uppercase tracking-wider"><i class="fa-solid fa-heart text-rose-500 mr-2 animate-pulse"></i> KANGEN SANTRI</h1>
+            <p class="text-xs text-slate-400 mt-1">Masukkan NIK untuk melihat dokumentasi 13 kegiatan ananda hari ini.</p>
+        </div>
+
+        <div class="flex gap-2">
+            <input type="text" id="input-nik" placeholder="Masukkan NIK Santri..." class="flex-1 bg-slate-950 border-2 border-slate-700 rounded-xl px-4 py-3 text-sm font-bold text-white outline-none focus:border-cyan-500">
+            <button onclick="cariFotoSantri()" class="bg-cyan-500 hover:bg-cyan-600 text-slate-950 font-black px-6 py-3 rounded-xl text-sm transition-all flex items-center gap-2 cursor-pointer">
+                <i class="fa-solid fa-magnifying-glass"></i> CARI
+            </button>
+        </div>
+        <p id="loading-status" class="text-xs font-bold mt-3 text-amber-400 hidden"><i class="fa-solid fa-spinner animate-spin mr-1"></i> Membuka album foto hari ini...</p>
+    </div>
+
+    <!-- Container Grid 13 Kegiatan -->
+    <div id="grid-foto-kegiatan" class="w-full max-w-2xl mx-auto grid grid-cols-2 sm:grid-cols-3 gap-4 hidden">
+        <!-- Struktur card di-generate via JavaScript -->
+    </div>
+
+    <!-- Tampilan Awal / Data Kosong -->
+    <div id="status-kosong" class="w-full max-w-md mx-auto my-auto text-center p-12 text-slate-500 flex flex-col items-center gap-3">
+        <i class="fa-solid fa-images text-4xl opacity-30"></i>
+        <p class="text-xs font-bold uppercase tracking-wider">Belum Ada Data Yang Dimuat</p>
+    </div>
+
+    <script>
+        // Samakan dengan URL Web App Apps Script Anda
+        const API_URL = "https://script.google.com/macros/s/AKfycbwR-Ml0M6mCXj2yc_E0Ihll3V3HIDlithCuMYvIsxSrtZdhVDJNMFZ5WKb657o8di5x/exec";
+
+        // Daftar 13 kegiatan persis seperti yang ada pada pilihan kiosk scanner
+        const DAFTAR_KEGIATAN = [
+            "Subuh", "Quranan", "Afsahan", "PDF 1", "PDF 2", "PDF 3", 
+            "Dzuhur", "Ashar", "Ndalem", "Maghrib", "Sorogan", "Isya", "Belajar"
+        ];
+
+        // Nama format display agar lebih enak dibaca oleh orang tua
+        const LABEL_KEGIATAN = {
+            "Subuh": "Jamaah Subuh", "Dzuhur": "Jamaah Dzuhur", "Ashar": "Jamaah Ashar",
+            "Maghrib": "Jamaah Maghrib", "Isya": "Jamaah Isya", "Quranan": "Ngaji Bakdo Subuh",
+            "Afsahan": "Kursus Afsahan", "PDF 1": "Sekolah Jam 1", "PDF 2": "Sekolah Jam 2",
+            "PDF 3": "Sekolah Jam 3", "Ndalem": "Ngaji Ndalem", "Sorogan": "Sorogan Kitab",
+            "Belajar": "Jam Belajar Malam"
+        };
+
+        async function cariFotoSantri() {
+            const nik = document.getElementById('input-nik').value.trim();
+            if (!nik) { alert("Silakan masukkan NIK terlebih dahulu"); return; }
+
+            const loader = document.getElementById('loading-status');
+            const grid = document.getElementById('grid-foto-kegiatan');
+            const kosong = document.getElementById('status-kosong');
+
+            loader.classList.remove('hidden');
+            grid.classList.add('hidden');
+            kosong.classList.add('hidden');
+
+            try {
+                const respon = await fetch(`${API_URL}?aksi=lihat_foto_harian&nik=${nik}`, { method: "GET" });
+                const json = await respon.json();
+
+                loader.classList.add('hidden');
+
+                if (json.status === "success") {
+                    const dataFoto = json.data; // Berisi objek { "Subuh": "base64...", "Isya": "base64..." }
+                    
+                    grid.innerHTML = ""; // Bersihkan kontainer lama
+                    grid.classList.remove('hidden');
+
+                    DAFTAR_KEGIATAN.forEach(kegiatan => {
+                        const card = document.createElement('div');
+                        card.className = "bg-slate-900 border border-slate-800 rounded-2xl overflow-hidden shadow-md flex flex-col";
+
+                        const labelBagus = LABEL_KEGIATAN[kegiatan] || kegiatan;
+                        const hasFoto = dataFoto[kegiatan];
+
+                        if (hasFoto) {
+                            // Jika santri sudah melakukan kegiatan tersebut dan berhasil difoto
+                            card.innerHTML = `
+                                <div class="relative aspect-square w-full bg-slate-950">
+                                    <img src="${hasFoto}" class="w-full h-full object-cover" alt="${kegiatan}">
+                                    <span class="absolute top-2 left-2 bg-emerald-500 text-slate-950 text-[9px] font-black px-2 py-0.5 rounded-md uppercase tracking-wide"><i class="fa-solid fa-check mr-1"></i> Hadir</span>
+                                </div>
+                                <div class="p-3 bg-slate-900 flex-1 flex flex-col justify-center">
+                                    <p class="text-[11px] font-black text-slate-200 tracking-wide uppercase line-clamp-1">${labelBagus}</p>
+                                </div>
+                            `;
+                        } else {
+                            // Jika santri belum absen pada kegiatan tersebut
+                            card.innerHTML = `
+                                <div class="relative aspect-square w-full bg-slate-950/60 flex flex-col items-center justify-center text-slate-700 p-4 border-b border-slate-800/50">
+                                    <i class="fa-solid fa-camera text-2xl opacity-20 mb-1"></i>
+                                    <span class="text-[10px] text-center font-bold tracking-wide opacity-50">Belum Absen / Berjalan</span>
+                                </div>
+                                <div class="p-3 bg-slate-900 opacity-40 flex-1 flex flex-col justify-center">
+                                    <p class="text-[11px] font-bold text-slate-400 tracking-wide uppercase line-clamp-1">${labelBagus}</p>
+                                </div>
+                            `;
+                        }
+                        grid.appendChild(card);
+                    });
+
+                } else {
+                    kosong.classList.remove('hidden');
+                    alert("Gagal memuat data dari server cloud.");
+                }
+            } catch (error) {
+                loader.classList.add('hidden');
+                kosong.classList.remove('hidden');
+                console.error(error);
+                alert("Terjadi kesalahan jaringan.");
+            }
+        }
+    </script>
+</body>
+</html>
