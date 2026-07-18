@@ -96,12 +96,12 @@
         let databaseSantri = [];
 
         const AMBANG_BATAS_KETAT = 0.48;    
-        const DETECTOR_INPUT_SIZE = 160;   // DIUBAH KE 160 UNTUK KECEPATAN DETEKSI MAKSIMAL
+        const DETECTOR_INPUT_SIZE = 320;   // DIKEMBALIKAN KE KELIPATAN STANDARD YANG VALID DAN AMAN
         const DETECTOR_SCORE_THRESH = 0.5;  
 
         let deteksiTerakhir = null;
         let hitungKonsistensi = 0;
-        const TARGET_KONSISTENSI = 1;     // DIUBAH KE 1 UNTUK MENGHILANGKAN JEDA ANTARA FRAME DETEKSI
+        const TARGET_KONSISTENSI = 1;     // TETAP 1 AGAR LANGSUNG TEMBUS BEGITU TERDETEKSI
 
         const CACHE_DB_KEY = 'cache_database_santri';
         const CACHE_DB_TIME_KEY = 'cache_database_time';
@@ -189,6 +189,7 @@
 
         async function siklusDeteksiKiosk() {
             if (isProcessing) {
+                // KETIKA SEDANG PROSES / POPUP AKTIF, PERIKSA KEMBALI SETIAP 100MS TANPA BEBAN BERAT
                 setTimeout(siklusDeteksiKiosk, 100);
                 return;
             }
@@ -198,7 +199,6 @@
                 return;
             }
 
-            // OPSI TINYFACEDETECTOR DIOPTIMALKAN UNTUK RUNTIME LEBIH CEPAT
             const opsiDetektor = new faceapi.TinyFaceDetectorOptions({ inputSize: DETECTOR_INPUT_SIZE, scoreThreshold: DETECTOR_SCORE_THRESH });
             
             const hasilWajah = await faceapi.detectSingleFace(video, opsiDetektor)
@@ -210,7 +210,7 @@
                 label.innerText = "POSISIKAN WAJAH DI KOTAK";
                 hitungKonsistensi = 0;
                 deteksiTerakhir = null;
-                requestAnimationFrame(siklusDeteksiKiosk);
+                requestAnimationFrame(siklusDeteksiKiosk); // REALTIME LOOP TANPA PENUNDAAN DETEKSI
                 return;
             }
 
@@ -301,6 +301,7 @@
             }
 
             try {
+                // KIRIM DATA POST PRESENSI KE SERVER
                 const kirim = await fetch(URL_ABSENSI, {
                     method: "POST",
                     mode: "no-cors",
@@ -317,7 +318,7 @@
                 const popSucc = document.getElementById('pop-success');
                 popSucc.classList.remove('hidden');
 
-                // BERIKAN WAKTU JEDA TEPAT 5 DETIK (5000 MS) UNTUK MEMBACA HASIL
+                // BERIKAN WAKTU JEDA TEPAT 5 DETIK (5000 MS) UNTUK MEMBACA HASIL DI LAYAR
                 setTimeout(() => {
                     popSucc.classList.add('hidden');
                     isProcessing = false;
@@ -326,7 +327,8 @@
                     requestAnimationFrame(siklusDeteksiKiosk);
                 }, 5000);
 
-                ambilDataTabunganRealtime(santri.nik);
+                // TRIGER IFRAME/DOCK TABUNGAN DI LATAR BELAKANG
+                window.parent.postMessage({ aksi: "minta_data_saldo", nik: santri.nik, nama: santri.nama }, "*");
 
             } catch(err) {
                 isProcessing = false;
@@ -336,13 +338,14 @@
             }
         }
 
-        async function ambilDataTabunganRealtime(nikTarget) {
-            try {
-                const res = await fetch(`${URL_ABSENSI}?aksi=ambil_database`, { method: "GET" });
-                const json = await res.json();
-                // Opsional: Implementasi internal jika ingin memperbarui teks di luar popup
-            } catch(e){}
-        }
+        // TANGKAP DATA JIKA DIKIRIM BALIK OLEH TABUNGAN.HTML KE POPUP
+        window.addEventListener("message", (event) => {
+            if (event.data && event.data.aksi === "kirim_saldo_ke_pop") {
+                const formattedSaldo = new Intl.NumberFormat('id-ID', { style: 'currency', currency: 'IDR', minimumFractionDigits: 0 }).format(event.data.saldoRaw);
+                document.getElementById('pop-nominal-tabungan').innerText = formattedSaldo;
+                document.getElementById('pop-pesan-motivasi').innerText = `Poin Harian: ${event.data.poinHarian} | Saldo & Hasil Poin Berhasil Diperbarui.`;
+            }
+        });
     </script>
 </body>
 </html>
