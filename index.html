@@ -265,7 +265,10 @@
 
                     // 1. DATA OFFLINE DITAMPILKAN DULU DI DETIK KE-0
                     // Nilai minus dipaksa positif dengan Math.abs
-                    let saldoKemarinRaw = parseFloat(santriDitemukan.saldo) || 0;
+// 1. DATA OFFLINE DITAMPILKAN DULU DI DETIK KE-0
+                    // Catatan: Pastikan properti penamaan objek dari Apps Script bernama 'saldo' atau 'jumlah_tabung'
+                    // Sesuaikan 'santriDitemukan.saldo' dengan nama kolom properti JSON Anda (contoh: santriDitemukan.saldo)
+                    let saldoKemarinRaw = parseFloat(santriDitemukan.saldo || santriDitemukan.jumlah_tabung) || 0;
                     let saldoKemarinBersih = Math.abs(Math.round(saldoKemarinRaw));
 
                     document.getElementById('txt-nama-sukses').innerText = santriDitemukan.nama.toUpperCase();
