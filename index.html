@@ -263,19 +263,15 @@
 
                     localStorage.setItem(storageKey, "TERCATAT");
 
-                    // 1. DATA OFFLINE DITAMPILKAN DULU DI DETIK KE-0
-                    // Nilai minus dipaksa positif dengan Math.abs
-// 1. DATA OFFLINE DITAMPILKAN DULU DI DETIK KE-0
-                    // Catatan: Pastikan properti penamaan objek dari Apps Script bernama 'saldo' atau 'jumlah_tabung'
-                    // Sesuaikan 'santriDitemukan.saldo' dengan nama kolom properti JSON Anda (contoh: santriDitemukan.saldo)
-                    let saldoKemarinRaw = parseFloat(santriDitemukan.saldo || santriDitemukan.jumlah_tabung) || 0;
+                    // 1. MEMBACA INDEKS SALDO KEMARIN SECARA TEPAT DARI BASIS DATA LOKAL (.saldo)
+                    let saldoKemarinRaw = parseFloat(santriDitemukan.saldo || santriDitemukan.tabungan) || 0;
                     let saldoKemarinBersih = Math.abs(Math.round(saldoKemarinRaw));
 
                     document.getElementById('txt-nama-sukses').innerText = santriDitemukan.nama.toUpperCase();
                     document.getElementById('pop-saldo-kemarin').innerText = "Rp " + saldoKemarinBersih.toLocaleString('id-ID');
                     document.getElementById('pop-saldo-hari-ini').innerText = "Memproses...";
                     document.getElementById('pop-saldo-hari-ini').classList.add('animate-pulse');
-                    document.getElementById('pop-total-saldo').innerText = "Menghitung...";
+                    document.getElementById('pop-total-saldo').innerText = "Menghitung... ";
                     document.getElementById('pop-pesan-motivasi').innerText = "Mengambil data mutakhir secara realtime dari server...";
                     document.getElementById('pop-success').classList.remove('hidden');
                     
@@ -292,7 +288,7 @@
                         foto: dataFotoBase64
                     };
 
-                    // 2. AMBIL LOGIKA REALTIME DARI DATABASE GOOGLE SHEETS VIA POST
+                    // 2. REQUEST DATA REALTIME KE CLOUD APPS SCRIPT VIA POST
                     try {
                         const responseCloud = await fetch(URL_ABSENSI, { 
                             method: "POST", 
@@ -307,9 +303,11 @@
 
                             // Nilai minus dipaksa positif
                             let saldoHariIniBersih = Math.abs(Math.round(saldoHariIniRaw));
+                            
+                            // 3. DIHITUNG OLEH HTML: KEMARIN + HARI INI
                             let totalAkumulasi = saldoKemarinBersih + saldoHariIniBersih;
 
-                            // Update UI HTML secara realtime
+                            // Update Tampilan UI Layar Kiosk
                             document.getElementById('pop-saldo-hari-ini').classList.remove('animate-pulse');
                             document.getElementById('pop-saldo-hari-ini').innerText = "Rp " + saldoHariIniBersih.toLocaleString('id-ID');
                             document.getElementById('pop-total-saldo').innerText = "Rp " + totalAkumulasi.toLocaleString('id-ID');
