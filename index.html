@@ -117,12 +117,12 @@
         const DURASI_CACHE_DB = 6 * 60 * 60 * 1000; 
 
         // Fungsi utility pembantu yang dimodifikasi untuk mempertahankan angka minus (-)
-        function formatRupiah(angka) {
-            if (angka === undefined || angka === null || isNaN(angka)) return "Rp 0";
-            let IsMinus = parseFloat(angka) < 0 ? "-" : "";
-            return IsMinus + "Rp " + Math.abs(parseInt(angka)).toLocaleString('id-ID');
-        }
-
+function formatRupiah(angka) {
+    if (angka === undefined || angka === null || isNaN(angka)) return "Rp 0";
+    let nilaiF = parseFloat(angka);
+    let IsMinus = nilaiF < 0 ? "-" : "";
+    return IsMinus + "Rp " + Math.abs(Math.round(nilaiF)).toLocaleString('id-ID');
+}
         function bunyikanBeep(frekuensi, durasi) {
             try {
                 const audioCtx = new (window.AudioContext || window.webkitAudioContext)();
