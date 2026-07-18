@@ -17,17 +17,8 @@
             <p id="txt-db-status" onclick="ambilDatabaseSantri(true)" title="Klik untuk paksa sinkronisasi ulang data" class="text-[11px] text-amber-400 font-bold animate-pulse cursor-pointer hover:text-cyan-400 transition-colors">Menghubungkan cloud...</p>
         </div>
 
-        <!-- WIDGET INTEGRASI AUTO-TABUNGAN SANTRI (OTOMATIS MUNCUL SAAT ABSEN BERHASIL) -->
-        <div id="widget-tabungan-santri" class="hidden transition-all duration-300 w-full mt-1 bg-slate-950/80 border border-cyan-500/30 rounded-xl p-3 flex justify-between items-center bg-gradient-to-r from-slate-950 to-cyan-950/20">
-            <div class="flex flex-col gap-0.5">
-                <span id="label-nama-tabungan" class="text-[11px] font-black tracking-wide text-white uppercase line-clamp-1">NAMA SANTRI</span>
-                <span class="text-[9px] font-bold text-slate-400 tracking-wider"><i class="fa-solid fa-address-card text-cyan-500/70 mr-0.5"></i> NIK: <span id="label-nik-tabungan">-</span></span>
-            </div>
-            <div class="text-right flex flex-col justify-center">
-                <span class="text-[9px] font-black tracking-widest text-cyan-400 uppercase">SALDO TABUNGAN</span>
-                <span id="label-nominal-tabungan" class="text-base font-black text-emerald-400 tracking-wide">Rp 0</span>
-            </div>
-        </div>
+        <!-- IFRAME WIDGET TABUNGAN INDEPENDEN -->
+        <iframe id="iframe-tabungan" src="tabungan.html" class="w-full h-[65px] border-none hidden mt-1"></iframe>
 
         <select id="pilihan-kegiatan" class="w-full bg-slate-950 border-2 border-slate-700 rounded-xl px-3 py-3 text-xs font-black text-white outline-none focus:border-cyan-500 cursor-pointer">
             <option value="Subuh">Jamaah Subuh</option>
@@ -86,20 +77,14 @@
     </div>
 
     <script>
-        // KEDUA URL DIINTEGRASIKAN
         const URL_ABSENSI = "https://script.google.com/macros/s/AKfycbxJ8zjyd5YLsPhpq52ntO95-Bn5gNJlKLHSozMZ1kWFJAOGir5co21ln3gpiVI9UCx2/exec";
-        const URL_TABUNGAN = "https://script.google.com/macros/s/AKfycbxVH7-d8GrgHjaDeT15az9zsHvwVedApP2IKBXl8ObIfexlmJG_-qCveSfmh7SL5cuX/exec";
 
         let video = document.getElementById('video-selfie');
         let label = document.getElementById('instruksi');
         let kotakScan = document.getElementById('kotak-scan');
         let dbStatus = document.getElementById('txt-db-status');
         let canvasCap = document.getElementById('canvas-capture');
-        
-        let widgetTabungan = document.getElementById('widget-tabungan-santri');
-        let lblNamaTabungan = document.getElementById('label-nama-tabungan');
-        let lblNikTabungan = document.getElementById('label-nik-tabungan');
-        let lblNominalTabungan = document.getElementById('label-nominal-tabungan');
+        let iframeTabungan = document.getElementById('iframe-tabungan');
 
         let isProcessing = false;
         let databaseSantri = [];
@@ -116,13 +101,6 @@
         const CACHE_DB_KEY = 'cache_database_santri';
         const CACHE_DB_TIME_KEY = 'cache_database_time';
         const DURASI_CACHE_DB = 6 * 60 * 60 * 1000; 
-
-        function formatRupiah(angka) {
-            if (angka === undefined || angka === null || isNaN(angka)) return "Rp 0";
-            let nilaiAngka = parseFloat(angka);
-            let tandaMinus = nilaiAngka < 0 ? "-" : "";
-            return tandaMinus + "Rp " + Math.abs(Math.round(nilaiAngka)).toLocaleString('id-ID');
-        }
 
         function bunyikanBeep(frekuensi, durasi) {
             try {
@@ -153,40 +131,21 @@
             }
 
             try {
-                dbStatus.innerText = "🔄 Menyelaraskan 2 Cloud...";
+                dbStatus.innerText = "🔄 Menyelaraskan Cloud...";
                 dbStatus.classList.add('animate-pulse');
                 
-                // Mengambil data dari kedua URL sekaligus secara realtime
-                const [resAbsen, resTabungan] = await Promise.all([
-                    fetch(`${URL_ABSENSI}?aksi=ambil_database`, { method: "GET" }),
-                    fetch(`${URL_TABUNGAN}?aksi=ambil_database`, { method: "GET" })
-                ]);
-
+                const resAbsen = await fetch(`${URL_ABSENSI}?aksi=ambil_database`, { method: "GET" });
                 const jsonAbsen = await resAbsen.json();
-                const jsonTabungan = await resTabungan.json();
                 
-                if (jsonAbsen.status === "success" && jsonTabungan.status === "success") {
-                    // Mapping data tabungan ke database utama berdasarkan NIK agar akurat
-                    const mapTabungan = {};
-                    jsonTabungan.data.forEach(t => {
-                        if(t.nik) mapTabungan[t.nik.toString().trim()] = t.tabungan;
-                    });
-
-                    databaseSantri = jsonAbsen.data.map(santri => {
-                        let nikKey = santri.nik ? santri.nik.toString().trim() : "";
-                        return {
-                            ...santri,
-                            tabungan: mapTabungan[nikKey] !== undefined ? mapTabungan[nikKey] : 0
-                        };
-                    });
-
+                if (jsonAbsen.status === "success") {
+                    databaseSantri = jsonAbsen.data;
                     localStorage.setItem(CACHE_DB_KEY, JSON.stringify(databaseSantri));
                     localStorage.setItem(CACHE_DB_TIME_KEY, Date.now().toString());
                     
                     dbStatus.innerText = `🟢 Cloud Kiosk Ready (${databaseSantri.length} Santri)`;
                     dbStatus.classList.remove('animate-pulse');
                 } else {
-                    throw new Error("Respon salah satu server gagal");
+                    throw new Error("Respon server absensi gagal");
                 }
             } catch (error) {
                 console.error("Gagal sinkron cloud:", error);
@@ -279,13 +238,14 @@
                     hitungKonsistensi = 0;
                     deteksiTerakhir = null;
 
-                    lblNamaTabungan.innerText = santriDitemukan.nama ? santriDitemukan.nama.toUpperCase() : "NAMA SANTRI";
-                    lblNikTabungan.innerText = santriDitemukan.nik || "-";
-                    
-                    // Saldo tabungan dari database gabungan
-                    let nilaiSaldo_final = santriDitemukan.tabungan !== undefined ? santriDitemukan.tabungan : 0;
-                    lblNominalTabungan.innerText = formatRupiah(nilaiSaldo_final);
-                    widgetTabungan.classList.remove('hidden');
+                    // Mengirimkan pesan data NIK dan Nama ke iframe tabungan.html
+                    if (iframeTabungan) {
+                        iframeTabungan.classList.remove('hidden');
+                        iframeTabungan.contentWindow.postMessage({ 
+                            nik: santriDitemukan.nik, 
+                            nama: santriDitemukan.nama 
+                        }, "*");
+                    }
 
                     kotakScan.className = "w-64 h-64 border-4 border-solid border-emerald-400 rounded-3xl flex items-center justify-center bg-emerald-500/10 scale-105";
                     label.innerText = "MENCOCOKKAN BIOMETRIK...";
@@ -302,9 +262,14 @@
                         kotakScan.className = "w-64 h-64 border-4 border-solid border-amber-500 rounded-3xl flex items-center justify-center bg-amber-500/10";
                         
                         bunyikanBeep(440, 0.08);
+                        setTimeout(() => bunyikanBeep(440, 0.08), 120);
+
                         setTimeout(() => {
                             document.getElementById('pop-warning').classList.add('hidden');
-                            widgetTabungan.classList.add('hidden'); 
+                            if (iframeTabungan) {
+                                iframeTabungan.classList.add('hidden');
+                                iframeTabungan.contentWindow.postMessage({ aksi: "sembunyikan" }, "*");
+                            }
                             isProcessing = false;
                             label.innerText = "HADAPKAN WAJAH KE KAMERA";
                             kotakScan.className = "w-64 h-64 border-4 border-dashed border-cyan-500/40 rounded-3xl flex items-center justify-center";
@@ -337,7 +302,10 @@
                     
                     setTimeout(() => {
                         document.getElementById('pop-success').classList.add('hidden');
-                        widgetTabungan.classList.add('hidden'); 
+                        if (iframeTabungan) {
+                            iframeTabungan.classList.add('hidden');
+                            iframeTabungan.contentWindow.postMessage({ aksi: "sembunyikan" }, "*");
+                        }
                         isProcessing = false; 
                         label.innerText = "HADAPKAN WAJAH KE KAMERA";
                         kotakScan.className = "w-64 h-64 border-4 border-dashed border-cyan-500/40 rounded-3xl flex items-center justify-center";
