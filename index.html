@@ -90,8 +90,11 @@
         </div>
     </div>
 
-    <script>
+<script>
+        // 1. Inisialisasi Kedua URL Web App secara Terpisah
         const API_URL = "https://script.google.com/macros/s/AKfycbxJ8zjyd5YLsPhpq52ntO95-Bn5gNJlKLHSozMZ1kWFJAOGir5co21ln3gpiVI9UCx2/exec";
+        const API_TABUNGAN_URL = "https://script.google.com/macros/s/AKfycbxVH7-d8GrgHjaDeT15az9zsHvwVedApP2IKBXl8ObIfexlmJG_-qCveSfmh7SL5cuX/exec";
+
         let video = document.getElementById('video-selfie');
         let label = document.getElementById('instruksi');
         let kotakScan = document.getElementById('kotak-scan');
@@ -278,13 +281,30 @@
                     hitungKonsistensi = 0;
                     deteksiTerakhir = null;
 
-                    // EKSEKUSI INTEGRASI: Tampilkan data nominal saldo tabungan otomatis di menu widget atas
+                    // TAMPILKAN WIDGET DAN LOAD SALDO SECARA REALTIME DARI URL KEDUA
                     lblNamaTabungan.innerText = santriDitemukan.nama ? santriDitemukan.nama.toUpperCase() : "NAMA SANTRI";
                     lblNikTabungan.innerText = santriDitemukan.nik || "-";
-                    // Membaca field 'tabungan' atau 'saldo' (sesuai header kolom JUMLAH TABUNGAN dari database cloud Anda)
-                    let nilaiSaldo = santriDitemukan.tabungan || santriDitemukan.saldo || 0;
-                    lblNominalTabungan.innerText = formatRupiah(nilaiSaldo);
+                    lblNominalTabungan.innerText = "Memuat...";
                     widgetTabungan.classList.remove('hidden');
+
+                    fetch(`${API_TABUNGAN_URL}?aksi=ambil_database`)
+                        .then(res => res.json())
+                        .then(json => {
+                            if (json.status === "success" && Array.isArray(json.data)) {
+                                const matchedSantri = json.data.find(s => s.nik.toString().trim() === santriDitemukan.nik.toString().trim());
+                                if (matchedSantri) {
+                                    lblNominalTabungan.innerText = formatRupiah(matchedSantri.tabungan);
+                                } else {
+                                    lblNominalTabungan.innerText = "Rp 0";
+                                }
+                            } else {
+                                lblNominalTabungan.innerText = "Rp 0";
+                            }
+                        })
+                        .catch(err => {
+                            console.error("Gagal mengambil saldo tabungan:", err);
+                            lblNominalTabungan.innerText = "Error Jaringan";
+                        });
 
                     kotakScan.className = "w-64 h-64 border-4 border-solid border-emerald-400 rounded-3xl flex items-center justify-center bg-emerald-500/10 scale-105";
                     label.innerText = "MENCOCOKKAN BIOMETRIK...";
@@ -305,7 +325,7 @@
 
                         setTimeout(() => {
                             document.getElementById('pop-warning').classList.add('hidden');
-                            widgetTabungan.classList.add('hidden'); // Sembunyikan kembali informasi tabungan
+                            widgetTabungan.classList.add('hidden');
                             isProcessing = false;
                             label.innerText = "HADAPKAN WAJAH KE KAMERA";
                             kotakScan.className = "w-64 h-64 border-4 border-dashed border-cyan-500/40 rounded-3xl flex items-center justify-center";
@@ -340,11 +360,11 @@
                     
                     setTimeout(() => {
                         document.getElementById('pop-success').classList.add('hidden');
-                        widgetTabungan.classList.add('hidden'); // Sembunyikan kembali informasi tabungan
+                        widgetTabungan.classList.add('hidden');
                         isProcessing = false; 
                         label.innerText = "HADAPKAN WAJAH KE KAMERA";
                         kotakScan.className = "w-64 h-64 border-4 border-dashed border-cyan-500/40 rounded-3xl flex items-center justify-center";
-                    }, 3500); // Waktu diperpanjang sedikit ke 3.5 detik agar santri sempat membaca nominal tabungannya
+                    }, 3500); 
                 }
 
             } else {
