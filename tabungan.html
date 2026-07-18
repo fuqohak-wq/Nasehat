@@ -2,7 +2,6 @@
 <html lang="id">
 <head>
     <meta charset="UTF-8">
-    <script src="https://cdn.jsdelivr.net/npm/@tailwindcss/browser@4"></script>
 </head>
 <body class="bg-transparent overflow-hidden text-slate-100">
 
@@ -16,68 +15,31 @@
                 const json = await res.json();
                 if (json.status === "success") {
                     listSaldoLokal = json.data;
-                    console.log("Widget Tabungan: Sync latar belakang berhasil.");
                 }
-            } catch (e) { console.error("Widget Tabungan: Gagal offline sync.", e); }
-        }
-
-        // FUNGSI INTI: Ambil data langsung dari cloud secara paksa demi keakuratan real-time saat scan sukses
-        async function ambilSaldoSpesifikRealtime(nik, nama) {
-            try {
-                const res = await fetch(`${API_TABUNGAN}?aksi=ambil_database`, { method: "GET" });
-                const json = await res.json();
-                if (json.status === "success") {
-                    listSaldoLokal = json.data;
-                    let NIK_Target = nik.toString().trim();
-                    let dataSantri = listSaldoLokal.find(s => s.nik && s.nik.toString().trim() === NIK_Target);
-                    
-                    let saldoFinal = dataSantri ? dataSantri.tabungan : 0;
-                    let poinHariIni = dataSantri && dataSantri.poin !== undefined ? parseInt(dataSantri.poin) : 0;
-
-                    // Kirim balik ke index.html secara instan
-                    window.parent.postMessage({
-                        aksi: "kirim_saldo_ke_pop",
-                        saldoRaw: saldoFinal,
-                        nama: nama,
-                        nik: NIK_Target,
-                        poinHarian: poinHariIni
-                    }, "*");
-                }
-            } catch (e) {
-                // Fallback jika fetch realtime gagal, gunakan data lokal cache
-                kirimDataDariCache(nik, nama);
-            }
-        }
-
-        function kirimDataDariCache(nik, nama) {
-            let NIK_Target = nik.toString().trim();
-            let dataSantri = listSaldoLokal.find(s => s.nik && s.nik.toString().trim() === NIK_Target);
-            let saldoFinal = dataSantri ? dataSantri.tabungan : 0;
-            let poinHariIni = dataSantri && dataSantri.poin !== undefined ? parseInt(dataSantri.poin) : 0;
-
-            window.parent.postMessage({
-                aksi: "kirim_saldo_ke_pop",
-                saldoRaw: saldoFinal,
-                nama: nama,
-                nik: NIK_Target,
-                poinHarian: poinHariIni
-            }, "*");
+            } catch (e) { console.error("Tabungan Sync Offline", e); }
         }
 
         window.addEventListener("message", (event) => {
             const { nik, nama, aksi } = event.data;
-            if (nik) {
-                if (aksi === "minta_data_saldo_realtime") {
-                    // Dipanggil setelah sukses nembak absen ke cloud
-                    ambilSaldoSpesifikRealtime(nik, nama);
-                } else if (aksi === "minta_data_saldo") {
-                    kirimDataDariCache(nik, nama);
-                }
+            if (aksi === "minta_data_saldo" && nik) {
+                let NIK_Target = nik.toString().trim();
+                let dataSantri = listSaldoLokal.find(s => s.nik && s.nik.toString().trim() === NIK_Target);
+                
+                let saldoFinal = dataSantri ? dataSantri.tabungan : 0;
+                let poinHariIni = dataSantri && dataSantri.poin !== undefined ? parseInt(dataSantri.poin) : 0;
+
+                window.parent.postMessage({
+                    aksi: "kirim_saldo_ke_pop",
+                    saldoRaw: saldoFinal,
+                    nama: nama,
+                    nik: NIK_Target,
+                    poinHarian: poinHariIni
+                }, "*");
             }
         });
 
         unduhSemuaSaldo();
-        setInterval(unduhSemuaSaldo, 5 * 60 * 1000);
+        setInterval(unduhSemuaSaldo, 3 * 60 * 1000); // Update data latar belakang tiap 3 minut
     </script>
 </body>
 </html>
