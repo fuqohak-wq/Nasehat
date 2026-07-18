@@ -6,8 +6,7 @@
 </head>
 <body class="bg-transparent overflow-hidden text-slate-100">
 
-    <!-- TAMPILAN WIDGET INTEGRASI -->
-    <div id="widget-tabungan" class="hidden transition-all duration-300 w-full bg-slate-950/80 border border-cyan-500/30 rounded-xl p-3 flex justify-between items-center bg-gradient-to-r from-slate-950 to-cyan-950/20">
+    <div id="widget-tabungan" class="hidden w-full bg-slate-950/80 border border-cyan-500/30 rounded-xl p-3 flex justify-between items-center bg-gradient-to-r from-slate-950 to-cyan-950/20">
         <div class="flex flex-col gap-0.5">
             <span id="label-nama" class="text-[11px] font-black tracking-wide text-white uppercase line-clamp-1">NAMA SANTRI</span>
             <span class="text-[9px] font-bold text-slate-400 tracking-wider">SALDO TABUNGAN</span>
@@ -18,11 +17,9 @@
     </div>
 
     <script>
-        // URL API Saldo Anda
         const API_TABUNGAN = "https://script.google.com/macros/s/AKfycbxVH7-d8GrgHjaDeT15az9zsHvwVedApP2IKBXl8ObIfexlmJG_-qCveSfmh7SL5cuX/exec";
         let listSaldoLokal = [];
 
-        // 1. OTO-DOWNLOAD: Saat widget dimuat, download semua data saldo ke memori lokal iframe
         async function unduhSemuaSaldo() {
             try {
                 const res = await fetch(`${API_TABUNGAN}?aksi=ambil_database`, { method: "GET" });
@@ -36,45 +33,27 @@
             }
         }
 
-        // 2. MENDENGARKAN ISYARAT: Menunggu kiriman data dari index.html saat wajah terdeteksi
         window.addEventListener("message", (event) => {
             const { nik, nama, aksi } = event.data;
 
-            // Jika index.html menyuruh menyembunyikan widget
-            if (aksi === "sembunyikan") {
-                document.getElementById('widget-tabungan').classList.add('hidden');
-                return;
-            }
+            if (aksi === "minta_data_saldo" && nik) {
+                let NIK_Target = nik.toString().trim();
+                let dataSantri = listSaldoLokal.find(s => s.nik && s.nik.toString().trim() === NIK_Target);
+                let saldoFinal = dataSantri ? dataSantri.tabungan : 0;
 
-            if (!nik) return;
-
-            // Set nama santri yang dikirim dari scan wajah
-            document.getElementById('label-nama').innerText = nama ? nama.toUpperCase() : "NAMA SANTRI";
-            document.getElementById('widget-tabungan').classList.remove('hidden');
-
-            // Cari nominal saldo berdasarkan NIK di data yang sudah diunduh tadi
-            let NIK_Target = nik.toString().trim();
-            let dataSantri = listSaldoLokal.find(s => s.nik && s.nik.toString().trim() === NIK_Target);
-
-            if (dataSantri) {
-                // Tampilkan saldo asli (termasuk jika nilainya minus)
-                document.getElementById('label-nominal').innerText = formatRupiah(dataSantri.tabungan);
-            } else {
-                // Fallback jika NIK tidak tercatat di sheet saldo
-                document.getElementById('label-nominal').innerText = "Rp 0";
+                // Balikkan data saldo beserta NIK ke index.html untuk Pop-Up
+                window.parent.postMessage({
+                    aksi: "kirim_saldo_ke_pop",
+                    saldoRaw: saldoFinal,
+                    nama: nama,
+                    nik: NIK_Target
+                }, "*");
             }
         });
 
-        // Fungsi pemformat Rupiah (Aman untuk angka minus)
-        function formatRupiah(angka) {
-            if (angka === undefined || angka === null || isNaN(angka)) return "Rp 0";
-            let nilaiAngka = parseFloat(angka);
-            let tandaMinus = nilaiAngka < 0 ? "-" : "";
-            return tandaMinus + "Rp " + Math.abs(Math.round(nilaiAngka)).toLocaleString('id-ID');
-        }
-
-        // Jalankan unduhan otomatis di background saat file pertama terbuka
         unduhSemuaSaldo();
+        // Auto refresh data saldo dari cloud setiap 10 menit
+        setInterval(unduhSemuaSaldo, 10 * 60 * 1000);
     </script>
 </body>
 </html>
