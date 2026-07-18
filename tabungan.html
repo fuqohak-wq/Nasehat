@@ -5,38 +5,57 @@
     <script src="https://cdn.jsdelivr.net/npm/@tailwindcss/browser@4"></script>
 </head>
 <body class="bg-transparent overflow-hidden text-slate-100">
+
     <script>
+        // Gunakan URL Web App Tabungan Anda
         const API_TABUNGAN = "https://script.google.com/macros/s/AKfycbxVH7-d8GrgHjaDeT15az9zsHvwVedApP2IKBXl8ObIfexlmJG_-qCveSfmh7SL5cuX/exec";
         let listSaldoLokal = [];
 
         async function unduhSemuaSaldo() {
             try {
-                const res = await fetch(`${API_TABUNGAN}?aksi=ambil_database`);
+                // Panggil endpoint Apps Script Tabungan
+                const res = await fetch(`${API_TABUNGAN}?aksi=ambil_database`, { method: "GET" });
                 const json = await res.json();
-                if (json.status === "success") { listSaldoLokal = json.data; }
-            } catch (e) { console.error("Gagal sinkron data", e); }
+                
+                if (json.status === "success") {
+                    // Simpan response database saldo ke memori lokal iframe
+                    listSaldoLokal = json.data;
+                    console.log("Widget Tabungan: Berhasil sinkronisasi " + listSaldoLokal.length + " data.");
+                }
+            } catch (e) {
+                console.error("Widget Tabungan: Gagal memuat data", e);
+            }
         }
 
         window.addEventListener("message", (event) => {
             const { nik, nama, aksi } = event.data;
-            if (aksi === "minta_data_saldo" && nik) {
-                let target = listSaldoLokal.find(s => s.nik?.toString().trim() === nik.toString().trim());
-                // Pastikan nilai absolut (PLUS)
-                let saldoFinal = target ? Math.abs(parseFloat(target.tabungan)) : 0;
-                let poinHariIni = target ? Math.abs(parseInt(target.poin)) : 0;
 
+            if (aksi === "minta_data_saldo" && nik) {
+                let NIK_Target = nik.toString().trim();
+                
+                // Cari data berdasarkan kecocokan NIK
+                let dataSantri = listSaldoLokal.find(s => s.nik && s.nik.toString().trim() === NIK_Target);
+                
+                let saldoFinal = dataSantri ? dataSantri.tabungan : 0;
+                
+                // PENTING: Jika data poin di kolom K tersedia di server tabungan, ambil nilainya
+                // Asumsi properti dari web app tabungan memuat data kolom K (kita sesuaikan di Apps Script Tabungan jika perlu)
+                let poinHariIni = dataSantri && dataSantri.poin !== undefined ? parseInt(dataSantri.poin) : 0;
+
+                // Kirim balik data Saldo DAN Poin Harian ke index.html
                 window.parent.postMessage({
                     aksi: "kirim_saldo_ke_pop",
                     saldoRaw: saldoFinal,
                     nama: nama,
-                    nik: nik,
+                    nik: NIK_Target,
                     poinHarian: poinHariIni
                 }, "*");
             }
         });
 
         unduhSemuaSaldo();
-        setInterval(unduhSemuaSaldo, 3 * 60 * 1000); // Percepat sinkron tiap 3 menit
+        // Sinkronisasi data saldo dan poin setiap 5 menit
+        setInterval(unduhSemuaSaldo, 5 * 60 * 1000);
     </script>
 </body>
 </html>
