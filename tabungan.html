@@ -8,35 +8,64 @@
         const API_TABUNGAN = "https://script.google.com/macros/s/AKfycbxVH7-d8GrgHjaDeT15az9zsHvwVedApP2IKBXl8ObIfexlmJG_-qCveSfmh7SL5cuX/exec";
         let listSaldoLokal = [];
 
+        // Sinkronisasi massal berkala untuk database cadangan awal
         async function unduhSemuaSaldo() {
             try {
                 const res = await fetch(`${API_TABUNGAN}?aksi=ambil_database`, { method: "GET" });
                 const json = await res.json();
                 if (json.status === "success") { listSaldoLokal = json.data; }
-            } catch (e) { console.error("Tabungan Offline Sync", e); }
+            } catch (e) { console.error("Offline Sync Error", e); }
         }
 
-        window.addEventListener("message", (event) => {
+        window.addEventListener("message", async (event) => {
             const { nik, nama, aksi } = event.data;
+            
             if (aksi === "minta_data_saldo" && nik) {
                 let NIK_Target = nik.toString().trim();
-                let dataSantri = listSaldoLokal.find(s => s.nik && s.nik.toString().trim() === NIK_Target);
                 
-                let saldoFinal = dataSantri ? dataSantri.tabungan : 0;
-                let poinHariIni = dataSantri && dataSantri.poin !== undefined ? parseInt(dataSantri.poin) : 0;
+                // 1. Ambil data dari memory cache lokal dulu untuk respon kilat milidetik
+                let dataSantri = listSaldoLokal.find(s => s.nik && s.nik.toString().trim() === NIK_Target);
+                let saldoAwal = dataSantri ? dataSantri.tabungan : 0;
+                let poinAwal = dataSantri && dataSantri.poin !== undefined ? parseInt(dataSantri.poin) : 0;
 
                 window.parent.postMessage({
-                    aksi: "kirim_saldo_ke_pop",
-                    saldoRaw: saldoFinal,
-                    nama: nama,
-                    nik: NIK_Target,
-                    poinHarian: poinHariIni
+                    aksi: "kirim_saldo_kilat",
+                    saldoRaw: saldoAwal,
+                    poinHarian: poinAwal,
+                    nik: NIK_Target
                 }, "*");
+
+                // 2. KREATIF: Langsung tembak cloud detik itu juga secara individu untuk dapetin saldo REAL-TIME
+                try {
+                    const resRealtime = await fetch(`${API_TABUNGAN}?aksi=ambil_database&nik=${NIK_Target}`, { method: "GET" });
+                    const jsonRealtime = await resRealtime.json();
+                    
+                    if (jsonRealtime.status === "success" && jsonRealtime.data) {
+                        // Jika API mengembalikan array data atau objek spesifik santri tersebut
+                        let dataTerbaru = Array.isArray(jsonRealtime.data) 
+                            ? jsonRealtime.data.find(s => s.nik && s.nik.toString().trim() === NIK_Target)
+                            : jsonRealtime.data;
+
+                        if (dataTerbaru) {
+                            // Update memori lokal agar scan berikutnya makin akurat
+                            let idx = listSaldoLokal.findIndex(s => s.nik && s.nik.toString().trim() === NIK_Target);
+                            if (idx !== -1) { listSaldoLokal[idx] = dataTerbaru; }
+
+                            // Kirim update saldo real-time ke layar yang sedang terbuka!
+                            window.parent.postMessage({
+                                aksi: "kirim_saldo_realtime",
+                                saldoRaw: dataTerbaru.tabungan,
+                                poinHarian: dataTerbaru.poin !== undefined ? parseInt(dataTerbaru.poin) : poinAwal,
+                                nik: NIK_Target
+                            }, "*");
+                        }
+                    }
+                } catch (err) { console.error("Gagal mengambil data real-time", err); }
             }
         });
 
         unduhSemuaSaldo();
-        setInterval(unduhSemuaSaldo, 3 * 60 * 1000); // Sinkronisasi latar belakang tiap 3 menit
+        setInterval(unduhSemuaSaldo, 2 * 60 * 1000); // refresh massal tiap 2 menit
     </script>
 </body>
 </html>
