@@ -8,13 +8,17 @@
         const API_TABUNGAN = "https://script.google.com/macros/s/AKfycbxVH7-d8GrgHjaDeT15az9zsHvwVedApP2IKBXl8ObIfexlmJG_-qCveSfmh7SL5cuX/exec";
         let listSaldoLokal = [];
 
-        // Sinkronisasi massal berkala untuk database cadangan awal
-        async function unduhSemuaSaldo() {
+        // 1. LOADING PERTAMA KALI: Unduh massal semua saldo paling fresh saat web dibuka
+        async function unduhSemuaSaldoAwal() {
             try {
+                console.log("Memulai sinkronisasi awal database tabungan...");
                 const res = await fetch(`${API_TABUNGAN}?aksi=ambil_database`, { method: "GET" });
                 const json = await res.json();
-                if (json.status === "success") { listSaldoLokal = json.data; }
-            } catch (e) { console.error("Offline Sync Error", e); }
+                if (json.status === "success") { 
+                    listSaldoLokal = json.data; 
+                    window.parent.postMessage({ aksi: "db_tabungan_siap", total: listSaldoLokal.length }, "*");
+                }
+            } catch (e) { console.error("Gagal sinkronisasi awal tabungan", e); }
         }
 
         window.addEventListener("message", async (event) => {
@@ -23,49 +27,46 @@
             if (aksi === "minta_data_saldo" && nik) {
                 let NIK_Target = nik.toString().trim();
                 
-                // 1. Ambil data dari memory cache lokal dulu untuk respon kilat milidetik
+                // Cari data langsung di memory RAM lokal (0 milidetik)
                 let dataSantri = listSaldoLokal.find(s => s.nik && s.nik.toString().trim() === NIK_Target);
                 let saldoAwal = dataSantri ? dataSantri.tabungan : 0;
                 let poinAwal = dataSantri && dataSantri.poin !== undefined ? parseInt(dataSantri.poin) : 0;
 
+                // Kirim langsung ke Kiosk Utama biar Pop-up Meledak Instan
                 window.parent.postMessage({
-                    aksi: "kirim_saldo_kilat",
+                    aksi: "kirim_saldo_instan",
                     saldoRaw: saldoAwal,
                     poinHarian: poinAwal,
                     nik: NIK_Target
                 }, "*");
 
-                // 2. KREATIF: Langsung tembak cloud detik itu juga secara individu untuk dapetin saldo REAL-TIME
+                // 2. SIASAT EMAS: Saat santri membaca layar, perbarui data NIK tersebut secara mandiri via Cloud
                 try {
                     const resRealtime = await fetch(`${API_TABUNGAN}?aksi=ambil_database&nik=${NIK_Target}`, { method: "GET" });
                     const jsonRealtime = await resRealtime.json();
                     
                     if (jsonRealtime.status === "success" && jsonRealtime.data) {
-                        // Jika API mengembalikan array data atau objek spesifik santri tersebut
                         let dataTerbaru = Array.isArray(jsonRealtime.data) 
                             ? jsonRealtime.data.find(s => s.nik && s.nik.toString().trim() === NIK_Target)
                             : jsonRealtime.data;
 
                         if (dataTerbaru) {
-                            // Update memori lokal agar scan berikutnya makin akurat
+                            // Update memori RAM lokal detik itu juga agar saldo berikutnya mutlak real-time
                             let idx = listSaldoLokal.findIndex(s => s.nik && s.nik.toString().trim() === NIK_Target);
-                            if (idx !== -1) { listSaldoLokal[idx] = dataTerbaru; }
-
-                            // Kirim update saldo real-time ke layar yang sedang terbuka!
-                            window.parent.postMessage({
-                                aksi: "kirim_saldo_realtime",
-                                saldoRaw: dataTerbaru.tabungan,
-                                poinHarian: dataTerbaru.poin !== undefined ? parseInt(dataTerbaru.poin) : poinAwal,
-                                nik: NIK_Target
-                            }, "*");
+                            if (idx !== -1) { 
+                                listSaldoLokal[idx] = dataTerbaru; 
+                            } else {
+                                listSaldoLokal.push(dataTerbaru);
+                            }
+                            console.log(`Data NIK ${NIK_Target} berhasil diperbarui di latar belakang.`);
                         }
                     }
-                } catch (err) { console.error("Gagal mengambil data real-time", err); }
+                } catch (err) { console.error("Gagal background update saldo santri", err); }
             }
         });
 
-        unduhSemuaSaldo();
-        setInterval(unduhSemuaSaldo, 2 * 60 * 1000); // refresh massal tiap 2 menit
+        // Jalankan unduh massal langsung saat loading pertama
+        unduhSemuaSaldoAwal();
     </script>
 </body>
 </html>
