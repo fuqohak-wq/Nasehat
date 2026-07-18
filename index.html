@@ -29,8 +29,8 @@
             <option value="Ndalem">Ngaji Ndalem Bakdo Ashar</option>
             <option value="Sorogan">Sorogan Kitab</option>
             <option value="Belajar">Jam Belajar</option>
-            <option value="Jumatan">Jumatan</option> <!-- Diperbaiki typo value -->
-            <option value="Ziarah">Ziarah Kubur</option> <!-- Diperbaiki typo value -->
+            <option value="Jumatan">Jumatan</option>
+            <option value="Ziarah">Ziarah Kubur</option>
         </select>
     </div>
 
@@ -48,7 +48,18 @@
     <!-- Canvas Tersembunyi untuk Proses Snapshot Foto -->
     <canvas id="canvas-capture" class="hidden"></canvas>
 
-    <div class="w-full max-w-md mx-auto"><a href="dashboard.html" class="w-full bg-slate-900 text-slate-400 font-bold py-3.5 rounded-2xl text-xs uppercase text-center block tracking-wider">Kembali ke Dashboard</a></div>
+    <!-- KUMPULAN TOMBOL NAVIGASI DILUAR MODAL -->
+    <div class="w-full max-w-md mx-auto flex flex-col gap-2 mt-4">
+        <!-- Tombol Khusus untuk Orang Tua (Menuju orangtua.html di repo yang sama) -->
+        <a href="orangtua.html" class="w-full bg-rose-950 border border-rose-800 text-rose-300 font-black py-3.5 rounded-2xl text-xs uppercase text-center block tracking-wider shadow-md hover:bg-rose-900 transition-colors">
+            <i class="fa-solid fa-heart animate-pulse mr-1"></i> Mode Orang Tua - Cek Foto Anak
+        </a>
+        
+        <!-- Tombol Dashboard Bawaan Kiosk -->
+        <a href="dashboard.html" class="w-full bg-slate-900 text-slate-400 font-bold py-3.5 rounded-2xl text-xs uppercase text-center block tracking-wider">
+            Kembali ke Dashboard
+        </a>
+    </div>
 
     <div id="pop-success" class="fixed inset-0 bg-slate-950/80 backdrop-blur-md flex items-center justify-center p-6 hidden z-50">
         <div class="bg-emerald-500 text-slate-950 w-full max-w-sm p-6 rounded-3xl text-center shadow-2xl border-2 border-emerald-400 animate-bounce">
@@ -178,19 +189,16 @@
             } catch (e) { label.innerText = "AI OFFLINE"; }
         });
 
-        // Fungsi pembantu untuk mengambil snapshot dari video camera
         function ambilSnapshotFoto() {
             try {
                 canvasCap.width = video.videoWidth;
                 canvasCap.height = video.videoHeight;
                 const ctx = canvasCap.getContext('2d');
                 
-                // Efek mirror disamakan dengan tampilan video kiosk (scale-x-[-1])
                 ctx.translate(canvasCap.width, 0);
                 ctx.scale(-1, 1);
                 
                 ctx.drawImage(video, 0, 0, canvasCap.width, canvasCap.height);
-                // Mengompres kualitas gambar ke 0.6 (60%) agar pengiriman ke Google Sheets ringan dan cepat
                 return canvasCap.toDataURL('image/jpeg', 0.6);
             } catch (error) {
                 console.error("Gagal mengambil foto:", error);
@@ -245,7 +253,6 @@
                     kotakScan.className = "w-64 h-64 border-4 border-solid border-emerald-400 rounded-3xl flex items-center justify-center bg-emerald-500/10 scale-105";
                     label.innerText = "MENCOCOKKAN BIOMETRIK...";
 
-                    // Ambil foto seketika saat wajah berhasil diverifikasi
                     const dataFotoBase64 = ambilSnapshotFoto();
 
                     const kegiatan = document.getElementById('pilihan-kegiatan').value;
@@ -275,7 +282,6 @@
                     fp.append('nik', santriDitemukan.nik);
                     fp.append('kegiatan', kegiatan);
                     fp.append('petugas', localStorage.getItem('session_nama'));
-                    // Menyisipkan data foto ke server Apps Script tanpa merusak parameter lama
                     fp.append('foto', dataFotoBase64); 
 
                     try {
