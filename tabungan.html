@@ -2,71 +2,60 @@
 <html lang="id">
 <head>
     <meta charset="UTF-8">
+    <script src="https://cdn.jsdelivr.net/npm/@tailwindcss/browser@4"></script>
 </head>
 <body class="bg-transparent overflow-hidden text-slate-100">
+
     <script>
+        // Gunakan URL Web App Tabungan Anda
         const API_TABUNGAN = "https://script.google.com/macros/s/AKfycbxVH7-d8GrgHjaDeT15az9zsHvwVedApP2IKBXl8ObIfexlmJG_-qCveSfmh7SL5cuX/exec";
         let listSaldoLokal = [];
 
-        // 1. LOADING PERTAMA KALI: Unduh massal semua saldo paling fresh saat web dibuka
-        async function unduhSemuaSaldoAwal() {
+        async function unduhSemuaSaldo() {
             try {
-                console.log("Memulai sinkronisasi awal database tabungan...");
+                // Panggil endpoint Apps Script Tabungan
                 const res = await fetch(`${API_TABUNGAN}?aksi=ambil_database`, { method: "GET" });
                 const json = await res.json();
-                if (json.status === "success") { 
-                    listSaldoLokal = json.data; 
-                    window.parent.postMessage({ aksi: "db_tabungan_siap", total: listSaldoLokal.length }, "*");
+                
+                if (json.status === "success") {
+                    // Simpan response database saldo ke memori lokal iframe
+                    listSaldoLokal = json.data;
+                    console.log("Widget Tabungan: Berhasil sinkronisasi " + listSaldoLokal.length + " data.");
                 }
-            } catch (e) { console.error("Gagal sinkronisasi awal tabungan", e); }
+            } catch (e) {
+                console.error("Widget Tabungan: Gagal memuat data", e);
+            }
         }
 
-        window.addEventListener("message", async (event) => {
+        window.addEventListener("message", (event) => {
             const { nik, nama, aksi } = event.data;
-            
+
             if (aksi === "minta_data_saldo" && nik) {
                 let NIK_Target = nik.toString().trim();
                 
-                // Cari data langsung di memory RAM lokal (0 milidetik)
+                // Cari data berdasarkan kecocokan NIK
                 let dataSantri = listSaldoLokal.find(s => s.nik && s.nik.toString().trim() === NIK_Target);
-                let saldoAwal = dataSantri ? dataSantri.tabungan : 0;
-                let poinAwal = dataSantri && dataSantri.poin !== undefined ? parseInt(dataSantri.poin) : 0;
+                
+                let saldoFinal = dataSantri ? dataSantri.tabungan : 0;
+                
+                // PENTING: Jika data poin di kolom K tersedia di server tabungan, ambil nilainya
+                // Asumsi properti dari web app tabungan memuat data kolom K (kita sesuaikan di Apps Script Tabungan jika perlu)
+                let poinHariIni = dataSantri && dataSantri.poin !== undefined ? parseInt(dataSantri.poin) : 0;
 
-                // Kirim langsung ke Kiosk Utama biar Pop-up Meledak Instan
+                // Kirim balik data Saldo DAN Poin Harian ke index.html
                 window.parent.postMessage({
-                    aksi: "kirim_saldo_instan",
-                    saldoRaw: saldoAwal,
-                    poinHarian: poinAwal,
-                    nik: NIK_Target
+                    aksi: "kirim_saldo_ke_pop",
+                    saldoRaw: saldoFinal,
+                    nama: nama,
+                    nik: NIK_Target,
+                    poinHarian: poinHariIni
                 }, "*");
-
-                // 2. SIASAT EMAS: Saat santri membaca layar, perbarui data NIK tersebut secara mandiri via Cloud
-                try {
-                    const resRealtime = await fetch(`${API_TABUNGAN}?aksi=ambil_database&nik=${NIK_Target}`, { method: "GET" });
-                    const jsonRealtime = await resRealtime.json();
-                    
-                    if (jsonRealtime.status === "success" && jsonRealtime.data) {
-                        let dataTerbaru = Array.isArray(jsonRealtime.data) 
-                            ? jsonRealtime.data.find(s => s.nik && s.nik.toString().trim() === NIK_Target)
-                            : jsonRealtime.data;
-
-                        if (dataTerbaru) {
-                            // Update memori RAM lokal detik itu juga agar saldo berikutnya mutlak real-time
-                            let idx = listSaldoLokal.findIndex(s => s.nik && s.nik.toString().trim() === NIK_Target);
-                            if (idx !== -1) { 
-                                listSaldoLokal[idx] = dataTerbaru; 
-                            } else {
-                                listSaldoLokal.push(dataTerbaru);
-                            }
-                            console.log(`Data NIK ${NIK_Target} berhasil diperbarui di latar belakang.`);
-                        }
-                    }
-                } catch (err) { console.error("Gagal background update saldo santri", err); }
             }
         });
 
-        // Jalankan unduh massal langsung saat loading pertama
-        unduhSemuaSaldoAwal();
+        unduhSemuaSaldo();
+        // Sinkronisasi data saldo dan poin setiap 5 menit
+        setInterval(unduhSemuaSaldo, 5 * 60 * 1000);
     </script>
 </body>
 </html>
