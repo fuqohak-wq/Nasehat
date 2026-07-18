@@ -2,247 +2,138 @@
 <html lang="id">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Kiosk Wajah AI - Super Fast</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>Terminal Kiosk Wajah AI - Pakem Optimized</title>
     <script src="https://cdn.jsdelivr.net/npm/@tailwindcss/browser@4"></script>
     <script defer src="https://cdn.jsdelivr.net/npm/face-api.js@0.22.2/dist/face-api.min.js"></script>
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
 </head>
-<body class="bg-[#050a15] text-slate-100 min-h-screen flex flex-col p-4 font-sans">
+<body class="bg-slate-950 text-slate-100 min-h-screen flex flex-col justify-between p-4">
 
-    <!-- HEADER STATUS -->
-    <div class="w-full max-w-md mx-auto bg-slate-900/50 border border-slate-800 p-4 rounded-3xl mb-4 backdrop-blur-md">
-        <div class="flex justify-between items-center mb-3">
-            <h1 class="text-[11px] font-black text-cyan-400 uppercase tracking-[0.2em]">AI KIOSK TERMINAL</h1>
-            <div id="status-badge" class="flex items-center gap-2 bg-red-500/10 px-3 py-1 rounded-full">
-                <div id="status-dot" class="w-2 h-2 rounded-full bg-red-500 animate-pulse"></div>
-                <p id="txt-db-status" class="text-[10px] text-red-500 font-black uppercase">Offline</p>
-            </div>
+    <div class="w-full max-w-md mx-auto bg-slate-900 border border-slate-800 p-4 rounded-2xl flex flex-col gap-2 shadow-lg">
+        <div class="flex justify-between items-center">
+            <h1 class="text-xs font-black text-cyan-400 uppercase tracking-wider"><i class="fa-solid fa-face-viewfinder mr-1"></i> TERMINAL KIOSK AI</h1>
+            <p id="txt-db-status" onclick="ambilDatabaseSantri(true)" class="text-[11px] text-amber-400 font-bold animate-pulse cursor-pointer">Menghubungkan...</p>
         </div>
-        <select id="pilihan-kegiatan" class="w-full bg-slate-950 border-2 border-slate-800 rounded-2xl px-4 py-4 text-sm font-black text-white outline-none focus:border-cyan-500 transition-all appearance-none">
+        <select id="pilihan-kegiatan" class="w-full bg-slate-950 border-2 border-slate-700 rounded-xl px-3 py-3 text-xs font-black text-white outline-none">
             <option value="Subuh">Jamaah Subuh</option>
             <option value="Dzuhur">Jamaah Dzuhur</option>
             <option value="Ashar">Jamaah Ashar</option>
             <option value="Maghrib">Jamaah Maghrib</option>
             <option value="Isya">Jamaah Isya</option>
-            <option value="Quranan">Ngaji Bakdo Subuh</option>
-            <option value="PDF 1">Sekolah Jam 1</option>
-            <option value="PDF 2">Sekolah Jam 2</option>
-            <option value="PDF 3">Sekolah Jam 3</option>
+            <option value="Quranan">Ngaji al-Qur'an</option>
+            <option value="PDF 1">Sekolah PDF 1</option>
+            <option value="PDF 2">Sekolah PDF 2</option>
+            <option value="Belajar">Jam Belajar</option>
         </select>
     </div>
 
-    <!-- AREA KAMERA -->
-    <div class="relative w-full max-w-md mx-auto aspect-[4/5] bg-slate-900 border-2 border-slate-800 rounded-[2.5rem] overflow-hidden shadow-2xl">
-        <video id="video-selfie" autoplay playsinline class="w-full h-full object-cover scale-x-[-1]"></video>
-        <div class="absolute inset-0 flex items-center justify-center pointer-events-none">
-            <div id="kotak-scan" class="w-72 h-72 border-2 border-dashed border-cyan-500/30 rounded-[3rem] flex items-center justify-center transition-all duration-500">
-                <div class="bg-slate-950/80 backdrop-blur-md border border-cyan-500/20 px-6 py-2 rounded-2xl">
-                    <span id="instruksi" class="text-[11px] text-cyan-400 font-black uppercase tracking-widest">Memuat AI...</span>
+    <div class="w-full max-w-md mx-auto my-auto flex flex-col justify-center items-center">
+        <div class="relative w-full aspect-square bg-slate-900 border-2 border-slate-800 rounded-3xl overflow-hidden shadow-2xl">
+            <video id="video-selfie" autoplay playsinline class="w-full h-full object-cover scale-x-[-1]"></video>
+            <div class="absolute inset-0 flex items-center justify-center pointer-events-none">
+                <div id="kotak-scan" class="w-64 h-64 border-4 border-dashed border-cyan-500/40 rounded-3xl flex items-center justify-center transition-all duration-300">
+                    <span id="instruksi" class="text-xs bg-slate-950/90 text-cyan-400 px-4 py-2 rounded-xl font-black uppercase tracking-widest border border-cyan-500/30">Memuat AI...</span>
                 </div>
             </div>
-        </div>
-    </div>
-
-    <!-- POP-UP HASIL (Tampil 5 Detik) -->
-    <div id="pop-success" class="fixed inset-0 bg-slate-950/95 backdrop-blur-2xl flex items-center justify-center p-6 hidden z-50">
-        <div class="bg-slate-900 border-2 border-emerald-500/30 w-full max-w-md rounded-[3rem] overflow-hidden shadow-[0_0_50px_rgba(16,185,129,0.2)]">
-            <div class="bg-emerald-500 p-6 text-center">
-                <div class="w-16 h-16 bg-white/20 rounded-full flex items-center justify-center mx-auto mb-3">
-                    <i class="fa-solid fa-check text-white text-3xl"></i>
-                </div>
-                <h2 id="txt-nama-sukses" class="text-white font-black text-2xl uppercase tracking-tight leading-none">NAMA SANTRI</h2>
-            </div>
-            
-            <div class="p-8 flex flex-col gap-6">
-                <div class="flex justify-between items-center bg-white/5 p-5 rounded-3xl border border-white/5">
-                    <span class="text-slate-400 text-xs font-bold uppercase tracking-widest">Saldo Awal</span>
-                    <span id="saldo-lama" class="text-white font-black text-xl">Rp 0</span>
-                </div>
-                
-                <div class="grid grid-cols-2 gap-4">
-                    <div class="bg-emerald-500/10 p-5 rounded-3xl border border-emerald-500/20 text-center">
-                        <span class="text-emerald-400 text-[10px] font-black uppercase block mb-1">Poin Hari Ini</span>
-                        <span id="poin-hari-ini" class="text-emerald-400 font-black text-3xl">0</span>
-                    </div>
-                    <div class="bg-cyan-500/10 p-5 rounded-3xl border border-cyan-500/20 text-center">
-                        <span class="text-cyan-400 text-[10px] font-black uppercase block mb-1">Saldo Akhir</span>
-                        <span id="saldo-baru" class="text-white font-black text-lg">Rp 0</span>
-                    </div>
-                </div>
-
-                <div class="space-y-3 text-center">
-                    <p id="pesan-motivasi" class="text-slate-400 text-xs italic px-4 leading-relaxed">Berhasil mencatat kehadiran...</p>
-                    <div class="w-full bg-slate-800 h-1.5 rounded-full overflow-hidden">
-                        <div id="progress-bar" class="bg-emerald-500 h-full w-0"></div>
-                    </div>
-                    <p class="text-[9px] text-slate-500 font-black uppercase tracking-[0.3em]">Siap dalam 5 detik</p>
-                </div>
-            </div>
-        </div>
-    </div>
-
-    <!-- POP-UP WARNING -->
-    <div id="pop-warning" class="fixed inset-0 bg-slate-950/90 backdrop-blur-md flex items-center justify-center p-8 hidden z-50">
-        <div class="bg-amber-500 text-slate-950 w-full max-w-xs p-8 rounded-[2.5rem] text-center shadow-2xl">
-            <i class="fa-solid fa-clock-rotate-left text-4xl mb-4"></i>
-            <h3 id="txt-nama-peringatan" class="font-black text-xl uppercase mb-1">NAMA SANTRI</h3>
-            <p class="font-bold text-xs uppercase tracking-widest opacity-80">Sudah Absen Hari Ini</p>
         </div>
     </div>
 
     <canvas id="canvas-capture" class="hidden"></canvas>
 
+    <!-- POP-UP SUKSES -->
+    <div id="pop-success" class="fixed inset-0 bg-slate-950/90 backdrop-blur-lg flex items-center justify-center p-6 hidden z-50">
+        <div class="bg-gradient-to-b from-emerald-500 to-teal-600 text-slate-950 w-full max-w-md p-6 rounded-3xl text-center shadow-2xl border-2 border-emerald-400">
+            <span class="text-xs font-black tracking-widest block opacity-85 uppercase">ABSENSI BERHASIL</span>
+            <span class="font-black text-2xl block mt-1 tracking-wide uppercase border-b border-slate-950/20 pb-3" id="txt-nama-sukses">...</span>
+            <div class="mt-4 bg-slate-950/20 rounded-2xl p-4 flex flex-col gap-1 text-center">
+                <span class="text-[10px] font-black tracking-widest text-slate-950 opacity-80 uppercase">SALDO TABUNGAN</span>
+                <span id="pop-nominal-tabungan" class="text-3xl font-black text-white tracking-wide">Rp 0</span>
+                <p id="pop-pesan-motivasi" class="text-xs font-bold text-slate-900 mt-2 bg-white/40 px-3 py-2.5 rounded-xl italic"></p>
+            </div>
+        </div>
+    </div>
+
     <script>
-        // GANTI DENGAN URL WEB APP HASIL DEPLOY TERBARU ANDA
         const URL_ABSENSI = "https://script.google.com/macros/s/AKfycbxJ8zjyd5YLsPhpq52ntO95-Bn5gNJlKLHSozMZ1kWFJAOGir5co21ln3gpiVI9UCx2/exec";
-        
         let video = document.getElementById('video-selfie');
         let label = document.getElementById('instruksi');
+        let kotakScan = document.getElementById('kotak-scan');
+        let dbStatus = document.getElementById('txt-db-status');
+        let canvasCap = document.getElementById('canvas-capture');
         let isProcessing = false;
-        let databaseSantriSiap = [];
-
-        async function startApp() {
-            try {
-                label.innerText = "LOADING MODELS...";
-                const MODEL_URL = 'https://unpkg.com/@vladmandic/face-api/model';
-                await faceapi.nets.tinyFaceDetector.loadFromUri(MODEL_URL);
-                await faceapi.nets.faceLandmark68Net.loadFromUri(MODEL_URL);
-                await faceapi.nets.faceRecognitionNet.loadFromUri(MODEL_URL);
-                
-                await ambilDatabaseSantri();
-                
-                const stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: "user" } });
-                video.srcObject = stream;
-                label.innerText = "HADAPKAN WAJAH";
-
-                // Loop Scan Super Cepat (200ms)
-                setInterval(async () => {
-                    if (isProcessing || databaseSantriSiap.length === 0) return;
-                    const deteksi = await faceapi.detectSingleFace(video, new faceapi.TinyFaceDetectorOptions({ inputSize: 224, scoreThreshold: 0.5 }))
-                                             .withFaceLandmarks().withFaceDescriptor();
-                    if (deteksi) verifikasiWajah(deteksi.descriptor);
-                }, 200);
-            } catch (e) { 
-                label.innerText = "ERROR KAMERA";
-                console.error(e);
-            }
-        }
+        let databaseSantri = [];
 
         async function ambilDatabaseSantri() {
             try {
+                dbStatus.innerText = "🔄 Sinkron...";
                 const res = await fetch(`${URL_ABSENSI}?aksi=ambil_database`);
                 const json = await res.json();
                 if (json.status === "success") {
-                    databaseSantriSiap = json.data.map(s => ({
-                        ...s,
-                        descriptor: s.vektor ? new Float32Array(Object.values(JSON.parse(s.vektor))) : null
-                    })).filter(s => s.descriptor !== null);
-                    
-                    // Update Status UI
-                    document.getElementById('status-dot').className = "w-2 h-2 rounded-full bg-emerald-500";
-                    document.getElementById('txt-db-status').innerText = "Online (" + databaseSantriSiap.length + ")";
-                    document.getElementById('txt-db-status').className = "text-[10px] text-emerald-500 font-black uppercase";
-                    document.getElementById('status-badge').className = "flex items-center gap-2 bg-emerald-500/10 px-3 py-1 rounded-full";
+                    databaseSantri = json.data;
+                    dbStatus.innerText = `🟢 Ready (${databaseSantri.length})`;
                 }
-            } catch (e) {
-                console.error("Gagal ambil DB:", e);
-            }
+            } catch (e) { dbStatus.innerText = "⚠️ Offline"; }
         }
 
-        async function verifikasiWajah(descriptorKamera) {
-            let ditemukan = null;
-            let jarakTerkecil = 0.48; 
-
-            for (let santri of databaseSantriSiap) {
-                const jarak = faceapi.euclideanDistance(descriptorKamera, santri.descriptor);
-                if (jarak < jarakTerkecil) {
-                    jarakTerkecil = jarak;
-                    ditemukan = santri;
-                }
-            }
-
-            if (ditemukan) {
-                const kegiatan = document.getElementById('pilihan-kegiatan').value;
-                const storageKey = `absen_${new Date().toLocaleDateString()}_${ditemukan.nik}_${kegiatan}`;
-
-                if (localStorage.getItem(storageKey)) {
-                    showWarning(ditemukan.nama);
-                    return;
-                }
-
-                isProcessing = true;
-                localStorage.setItem(storageKey, "1");
-                showSuccess(ditemukan);
-            }
-        }
-
-        function showSuccess(santri) {
-            document.getElementById('txt-nama-sukses').innerText = santri.nama;
-            document.getElementById('pop-success').classList.remove('hidden');
+        window.addEventListener('DOMContentLoaded', async () => {
+            await faceapi.nets.tinyFaceDetector.loadFromUri('https://unpkg.com/@vladmandic/face-api/model');
+            await faceapi.nets.faceLandmark68Net.loadFromUri('https://unpkg.com/@vladmandic/face-api/model');
+            await faceapi.nets.faceRecognitionNet.loadFromUri('https://unpkg.com/@vladmandic/face-api/model');
+            await ambilDatabaseSantri();
+            const stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: "user" } });
+            video.srcObject = stream;
+            label.innerText = "SCAN WAJAH ANDA";
             
-            const canvas = document.getElementById('canvas-capture');
-            canvas.width = video.videoWidth; canvas.height = video.videoHeight;
-            canvas.getContext('2d').drawImage(video, 0, 0);
-            const foto = canvas.toDataURL('image/jpeg', 0.4);
+            setInterval(async () => {
+                if (isProcessing || !databaseSantri.length) return;
+                const detection = await faceapi.detectSingleFace(video, new faceapi.TinyFaceDetectorOptions()).withFaceLandmarks().withFaceDescriptor();
+                if (detection) { verifikasiWajah(detection.descriptor); }
+            }, 500);
+        });
 
-            fetch(URL_ABSENSI, {
-                method: 'POST',
-                body: JSON.stringify({
-                    aksi: "absen_santri",
-                    nik: santri.nik,
-                    kegiatan: document.getElementById('pilihan-kegiatan').value,
-                    foto: foto
-                })
-            })
-            .then(r => r.json())
-            .then(res => {
-                if (res.status === "success") {
-                    // Tampilkan angka ABSOLUT (selalu positif)
-                    const sLama = Math.abs(Math.round(res.realtime.saldoLama));
-                    const sBaru = Math.abs(Math.round(res.realtime.saldoBaru));
+        async function verifikasiWajah(descriptor) {
+            let matches = databaseSantri.map(s => ({
+                nik: s.nik, nama: s.nama, 
+                dist: faceapi.euclideanDistance(descriptor, Object.values(JSON.parse(s.vektor)))
+            })).filter(m => m.dist < 0.45);
+
+            if (matches.length > 0) {
+                let found = matches.sort((a, b) => a.dist - b.dist)[0];
+                isProcessing = true;
+                
+                // Tampilkan Loading Cepat
+                document.getElementById('txt-nama-sukses').innerText = found.nama;
+                document.getElementById('pop-nominal-tabungan').innerText = "Menghitung...";
+                document.getElementById('pop-success').classList.remove('hidden');
+
+                const snap = canvasCap.toDataURL('image/jpeg', 0.5);
+                const res = await fetch(URL_ABSENSI, {
+                    method: "POST",
+                    body: JSON.stringify({
+                        aksi: "absen_santri", nik: found.nik, 
+                        kegiatan: document.getElementById('pilihan-kegiatan').value,
+                        petugas: "KIOSK_AI", foto: snap
+                    })
+                });
+                
+                const data = await res.json();
+                if (data.status === "success") {
+                    // Gunakan Math.abs (PLUS) dan Format Rupiah
+                    let sld = Math.abs(data.realtime.saldo);
+                    let pn = Math.abs(data.realtime.poin);
                     
-                    document.getElementById('saldo-lama').innerText = "Rp " + sLama.toLocaleString('id-ID');
-                    document.getElementById('saldo-baru').innerText = "Rp " + sBaru.toLocaleString('id-ID');
-                    document.getElementById('poin-hari-ini').innerText = res.realtime.poin;
-                    document.getElementById('pesan-motivasi').innerText = "Alhamdulillah, data tabunganmu sudah diperbarui!";
+                    document.getElementById('pop-nominal-tabungan').innerText = "Rp " + sld.toLocaleString('id-ID');
+                    document.getElementById('pop-pesan-motivasi').innerText = `Hebat ${found.nama.split(' ')[0]}! Kamu sudah ikut ${pn} kegiatan hari ini. Semangat!`;
                 }
-            });
 
-            // Animasi Progress Bar 5 Detik
-            let progress = 0;
-            const interval = setInterval(() => {
-                progress += 2;
-                document.getElementById('progress-bar').style.width = progress + "%";
-                if(progress >= 100) clearInterval(interval);
-            }, 100);
-
-            setTimeout(() => {
-                document.getElementById('pop-success').classList.add('hidden');
-                document.getElementById('progress-bar').style.width = "0%";
-                resetState();
-            }, 5000);
+                // Hasil tampil tepat 5 detik
+                setTimeout(() => {
+                    document.getElementById('pop-success').classList.add('hidden');
+                    isProcessing = false;
+                }, 5000);
+            }
         }
-
-        function showWarning(nama) {
-            isProcessing = true;
-            document.getElementById('txt-nama-peringatan').innerText = nama;
-            document.getElementById('pop-warning').classList.remove('hidden');
-            setTimeout(() => {
-                document.getElementById('pop-warning').classList.add('hidden');
-                resetState();
-            }, 3000);
-        }
-
-        function resetState() {
-            isProcessing = false;
-            document.getElementById('saldo-lama').innerText = "Rp ...";
-            document.getElementById('saldo-baru').innerText = "Rp ...";
-            document.getElementById('poin-hari-ini').innerText = "0";
-            label.innerText = "HADAPKAN WAJAH";
-        }
-
-        startApp();
     </script>
 </body>
 </html>
