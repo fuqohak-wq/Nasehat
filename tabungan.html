@@ -6,77 +6,48 @@
 </head>
 <body style="background:transparent; margin:0; padding:0; overflow:hidden;">
     <script>
-        const API_TABUNGAN = "https://script.google.com/macros/s/AKfycbJ8zjyd5YLsPhpq52ntO95-Bn5gNJlKLHSozMZ1kWFJAOGir5co21ln3gpiVI9UCx2/exec";
+        const API_TABUNGAN = "https://script.google.com/macros/s/AKfycbVH7-d8GrgHjaDeT15az9zsHvwVedApP2IKBXl8ObIfexlmJG_-qCveSfmh7SL5cuX/exec";
         let listSaldoLokal = [];
 
         async function unduhSemuaSaldo() {
             try {
                 const res = await fetch(`${API_TABUNGAN}?aksi=ambil_database`, { method: "GET" });
                 const json = await res.json();
-                if (json.status === "success") {
-                    listSaldoLokal = json.data;
-                }
-            } catch (e) {
-                console.error("Gagal sinkronisasi saldo lokal", e);
-            }
-        }
-
-        // Mengonversi nilai secara presisi tanpa mematikan pecahan/ribuan kecil
-        function parsingNilaiMurni(nilai) {
-            if (nilai === undefined || nilai === null) return 0;
-            let str = nilai.toString().trim();
-            
-            // Jika terdeteksi string dengan format titik indo (misal 1.304), bersihkan agar menjadi angka valid 1304
-            if (str.includes('.') && !str.includes(',')) {
-                let parts = str.split('.');
-                if (parts[parts.length - 1].length === 3) {
-                    str = str.replace(/\./g, '');
-                }
-            }
-            return Math.abs(parseFloat(str) || 0);
+                if (json.status === "success") listSaldoLokal = json.data;
+            } catch (e) { console.error("Sync Error", e); }
         }
 
         window.addEventListener("message", (event) => {
             const { nik, nama, aksi, realtimeSaldo, realtimePoin } = event.data;
 
             if (aksi === "minta_data_saldo" && nik) {
-                let NIK_Target = nik.toString().trim();
-                let dataSantri = listSaldoLokal.find(s => s.nik && s.nik.toString().trim() === NIK_Target);
+                let nikTarget = nik.toString().trim();
+                let dataLama = listSaldoLokal.find(s => s.nik === nikTarget);
                 
-                // Ambil data saldo baseline (sebelum scan absensi terbaru masuk)
-                let saldoKemarinRaw = dataSantri ? parsingNilaiMurni(dataSantri.saldo) : 0;
+                // Saldo sebelum absen (dari cache lokal)
+                let saldoKemarin = dataLama ? parseFloat(dataLama.saldo) : (parseFloat(realtimeSaldo) - 500);
                 
-                // Ambil total saldo terkini dari respon post (Kolom D terbaru)
-                let totalSaldoTerbaru = realtimeSaldo !== undefined ? parsingNilaiMurni(realtimeSaldo) : saldoKemarinRaw;
-                let poinHariIni = realtimePoin !== undefined ? parseInt(realtimePoin) : (dataSantri ? parseInt(dataSantri.poin) : 0);
+                // Saldo total saat ini (dari respon realtime server)
+                let totalSekarang = parseFloat(realtimeSaldo) || 0;
+                
+                // Reward hari ini
+                let saldoHariIni = totalSekarang - saldoKemarin;
+                if (saldoHariIni <= 0) saldoHariIni = 500; // Minimal reward jika sync delay
 
-                // LOGIKA FIX: Total Saldo Teranyar dikurangi Saldo Awal untuk mencari Saldo Hari Ini
-                let saldoHariIniRaw = totalSaldoTerbaru - saldoKemarinRaw;
-                
-                // Jika rumusnya memotong atau menghasilkan angka minus/nol karena delay sync spreadsheet:
-                if (saldoHariIniRaw <= 0) {
-                    // Nilai default reward per scan (bisa disesuaikan, misal Rp 500 atau Rp 1.000)
-                    saldoHariIniRaw = 500; 
-                    
-                    // Total akumulasi ditambahkan secara logis
-                    totalSaldoTerbaru = saldoKemarinRaw + saldoHariIniRaw;
-                }
-
-                // Kirim hasil kalkulasi penjumlahan yang sudah benar ke index.html
                 window.parent.postMessage({
                     aksi: "kirim_saldo_ke_pop",
-                    saldoKemarin: saldoKemarinRaw,
-                    saldoHariIni: saldoHariIniRaw,
-                    totalSaldo: totalSaldoTerbaru,
+                    saldoKemarin: saldoKemarin,
+                    saldoHariIni: saldoHariIni,
+                    totalSaldo: totalSekarang,
                     nama: nama,
-                    nik: NIK_Target,
-                    poinHarian: poinHariIni
+                    nik: nikTarget,
+                    poinHarian: realtimePoin
                 }, "*");
             }
         });
 
         unduhSemuaSaldo();
-        setInterval(unduhSemuaSaldo, 3 * 60 * 1000);
+        setInterval(unduhSemuaSaldo, 2 * 60 * 1000); // Sync tiap 2 menit
     </script>
 </body>
 </html>
