@@ -6,48 +6,46 @@
 </head>
 <body style="background:transparent; margin:0; padding:0; overflow:hidden;">
     <script>
-        const API_TABUNGAN = "https://script.google.com/macros/s/AKfycbVH7-d8GrgHjaDeT15az9zsHvwVedApP2IKBXl8ObIfexlmJG_-qCveSfmh7SL5cuX/exec";
-        let listSaldoLokal = [];
-
-        async function unduhSemuaSaldo() {
-            try {
-                const res = await fetch(`${API_TABUNGAN}?aksi=ambil_database`, { method: "GET" });
-                const json = await res.json();
-                if (json.status === "success") listSaldoLokal = json.data;
-            } catch (e) { console.error("Sync Error", e); }
+        // Mesin Pembersih Desimal & Minus Radikal
+        function bersihkanDanUbahPositif(nilaiMentah) {
+            if (nilaiMentah === undefined || nilaiMentah === null) return 0;
+            // Ubah ke string, bersihkan spasi & simbol
+            let str = nilaiMentah.toString().replace(/Rp/gi, '').replace(/\s/g, '');
+            
+            // Atasi format separator titik ribuan Indonesia
+            if (str.includes('.') && !str.includes(',')) {
+                let bagian = str.split('.');
+                if (bagian[bagian.length - 1].length === 3) {
+                    str = str.replace(/\./g, '');
+                }
+            }
+            let angka = parseFloat(str) || 0;
+            return Math.abs(angka); // Konversi paksa menjadi POSITIF
         }
 
         window.addEventListener("message", (event) => {
-            const { nik, nama, aksi, realtimeSaldo, realtimePoin } = event.data;
+            const { nik, nama, aksi, realtimeSaldo, realtimePoin, realtimeSaldoKemarin } = event.data;
 
             if (aksi === "minta_data_saldo" && nik) {
-                let nikTarget = nik.toString().trim();
-                let dataLama = listSaldoLokal.find(s => s.nik === nikTarget);
-                
-                // Saldo sebelum absen (dari cache lokal)
-                let saldoKemarin = dataLama ? parseFloat(dataLama.saldo) : (parseFloat(realtimeSaldo) - 500);
-                
-                // Saldo total saat ini (dari respon realtime server)
-                let totalSekarang = parseFloat(realtimeSaldo) || 0;
-                
-                // Reward hari ini
-                let saldoHariIni = totalSekarang - saldoKemarin;
-                if (saldoHariIni <= 0) saldoHariIni = 500; // Minimal reward jika sync delay
+                // Ambil & paksa semua data menjadi bernilai positif
+                let saldoKemarin = bersihkanDanUbahPositif(realtimeSaldoKemarin); 
+                let saldoHariIni = bersihkanDanUbahPositif(realtimeSaldo); 
+                let totalSaldo = saldoKemarin + saldoHariIni; // Penjumlahan di HTML
 
+                let poinHarian = realtimePoin !== undefined ? parseInt(realtimePoin) : 0;
+
+                // Kirim balik data mutlak ke index.html
                 window.parent.postMessage({
                     aksi: "kirim_saldo_ke_pop",
                     saldoKemarin: saldoKemarin,
                     saldoHariIni: saldoHariIni,
-                    totalSaldo: totalSekarang,
+                    totalSaldo: totalSaldo,
                     nama: nama,
-                    nik: nikTarget,
-                    poinHarian: realtimePoin
+                    nik: nik,
+                    poinHarian: poinHarian
                 }, "*");
             }
         });
-
-        unduhSemuaSaldo();
-        setInterval(unduhSemuaSaldo, 2 * 60 * 1000); // Sync tiap 2 menit
     </script>
 </body>
 </html>
