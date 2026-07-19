@@ -3,24 +3,23 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>Terminal Kiosk Wajah AI - Optimized</title>
+    <title>Terminal Kiosk Wajah AI - Fixed Calculation</title>
     <script src="https://cdn.jsdelivr.net/npm/@tailwindcss/browser@4"></script>
     <script defer src="https://cdn.jsdelivr.net/npm/face-api.js@0.22.2/dist/face-api.min.js"></script>
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
     <style>
-        .spinner { border-top-color: #06b6d4; animation: spin 1s linear infinite; }
+        .spinner-kiosk { border-top-color: #22d3ee; animation: spin 0.8s linear infinite; }
         @keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
     </style>
 </head>
 <body class="bg-slate-950 text-slate-100 min-h-screen flex flex-col justify-between p-4">
 
-    <!-- LOADING SPINNER OVERLAY -->
-    <div id="loading-overlay" class="fixed inset-0 bg-slate-950/80 backdrop-blur-md flex flex-col items-center justify-center z-[100] hidden">
-        <div class="w-16 h-16 border-4 border-slate-800 border-t-cyan-500 rounded-full animate-spin"></div>
-        <p class="mt-4 text-cyan-400 font-black text-xs tracking-widest uppercase animate-pulse">Mengkalkulasi Tabungan...</p>
+    <!-- SPINNER OVERLAY (Dibuat lebih keren & cepat) -->
+    <div id="loading-overlay" class="fixed inset-0 bg-slate-950/90 backdrop-blur-md flex flex-col items-center justify-center z-[100] hidden">
+        <div class="w-20 h-20 border-4 border-slate-800 border-t-cyan-500 rounded-full animate-spin shadow-[0_0_20px_rgba(6,182,212,0.5)]"></div>
+        <p class="mt-6 text-cyan-400 font-black text-sm tracking-[0.2em] uppercase animate-pulse">MENGKALKULASI TABUNGAN...</p>
     </div>
 
-    <!-- Memanggil tabungan.html secara asinkron -->
     <iframe id="iframe-tabungan" src="tabungan.html" class="hidden"></iframe>
 
     <div class="w-full max-w-md mx-auto bg-slate-900 border border-slate-800 p-4 rounded-2xl flex flex-col gap-2 shadow-lg">
@@ -70,11 +69,11 @@
         </a>
     </div>
 
-    <!-- POP-UP UTAMA HASIL -->
+    <!-- POP-UP HASIL -->
     <div id="pop-success" class="fixed inset-0 bg-slate-950/95 backdrop-blur-xl flex items-center justify-center p-6 hidden z-[110]">
         <div class="bg-gradient-to-b from-emerald-500 to-teal-600 text-slate-950 w-full max-w-md p-6 rounded-3xl text-center shadow-2xl border-2 border-emerald-400">
             <span class="text-xs font-black tracking-widest block opacity-85 uppercase"><i class="fa-solid fa-circle-check animate-pulse mr-1"></i> LOG JAMAAH DICATAT</span>
-            <span class="font-black text-2xl block mt-1 tracking-wide uppercase border-b border-slate-950/20 pb-3" id="txt-nama-sukses">Nama Santri</span>
+            <span class="font-black text-2xl block mt-1 tracking-wide uppercase border-b border-slate-950/20 pb-3" id="txt-nama-sukses">NAMA SANTRI</span>
             
             <div class="mt-4 bg-slate-950/20 rounded-2xl p-4 flex flex-col gap-3 text-center">
                 <div class="flex flex-col gap-1 border-b border-white/10 pb-2">
@@ -91,14 +90,13 @@
                 </div>
                 <p id="pop-pesan-motivasi" class="text-xs font-bold text-slate-900 mt-2 bg-white/40 px-3 py-2.5 rounded-xl italic leading-relaxed"></p>
             </div>
-            <button onclick="tutupPopup()" class="mt-5 w-full bg-slate-950 text-white font-black py-3 rounded-xl text-xs uppercase tracking-widest">LANJUTKAN SCAN</button>
+            <button onclick="tutupPopup()" class="mt-5 w-full bg-slate-950 text-white font-black py-4 rounded-2xl text-xs uppercase tracking-widest shadow-lg active:scale-95 transition-transform">LANJUTKAN SCAN</button>
         </div>
     </div>
 
-    <!-- POP-UP WARNING -->
     <div id="pop-warning" class="fixed inset-0 bg-slate-950/80 backdrop-blur-md flex items-center justify-center p-6 hidden z-[110]">
         <div class="bg-amber-500 text-slate-950 w-full max-w-sm p-6 rounded-3xl text-center shadow-2xl border-2 border-amber-400">
-            <span class="text-xs font-black tracking-widest block opacity-75"><i class="fa-solid fa-triangle-exclamation mr-1"></i> AKSES DITOLAK</span>
+            <span class="text-xs font-black tracking-widest block opacity-75 uppercase"><i class="fa-solid fa-triangle-exclamation mr-1"></i> AKSES DITOLAK</span>
             <span class="font-black text-base block mt-1 tracking-wide" id="txt-nama-peringatan">NAMA SANTRI</span>
             <span class="text-[11px] font-bold block mt-1 bg-slate-950/20 py-1 rounded-lg uppercase tracking-wider">Sudah Absen Pada Kegiatan Ini!</span>
         </div>
@@ -118,26 +116,6 @@
         let isProcessing = false;
         let databaseSantri = [];
 
-        const AMBANG_BATAS_KETAT = 0.48;    
-        const DETECTOR_INPUT_SIZE = 416;    
-        const DETECTOR_SCORE_THRESH = 0.5;  
-
-        function bunyikanBeep(frekuensi, durasi) {
-            try {
-                const audioCtx = new (window.AudioContext || window.webkitAudioContext)();
-                const oscillator = audioCtx.createOscillator();
-                const gainNode = audioCtx.createGain();
-                oscillator.connect(gainNode);
-                gainNode.connect(audioCtx.destination);
-                oscillator.type = 'sine';
-                oscillator.frequency.value = frekuensi;
-                gainNode.gain.setValueAtTime(0.3, audioCtx.currentTime);
-                oscillator.start();
-                gainNode.gain.exponentialRampToValueAtTime(0.00001, audioCtx.currentTime + durasi);
-                oscillator.stop(audioCtx.currentTime + durasi);
-            } catch (e) {}
-        }
-
         async function ambilDatabaseSantri() {
             try {
                 dbStatus.innerText = "🔄 Sync AI Face Cloud...";
@@ -151,6 +129,19 @@
             } catch (error) { dbStatus.innerText = `⚠️ Cloud Error`; }
         }
 
+        function bunyikanBeep(frekuensi, durasi) {
+            try {
+                const audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+                const oscillator = audioCtx.createOscillator();
+                const gainNode = audioCtx.createGain();
+                oscillator.connect(gainNode); gainNode.connect(audioCtx.destination);
+                oscillator.type = 'sine'; oscillator.frequency.value = frekuensi;
+                gainNode.gain.setValueAtTime(0.3, audioCtx.currentTime);
+                oscillator.start(); gainNode.gain.exponentialRampToValueAtTime(0.00001, audioCtx.currentTime + durasi);
+                oscillator.stop(audioCtx.currentTime + durasi);
+            } catch (e) {}
+        }
+
         window.addEventListener('DOMContentLoaded', async () => {
             if (!localStorage.getItem('session_nama')) { localStorage.setItem('session_nama', 'KIOSK_MANDIRI'); }
             try {
@@ -158,41 +149,35 @@
                 await faceapi.nets.tinyFaceDetector.loadFromUri('https://unpkg.com/@vladmandic/face-api/model');
                 await faceapi.nets.faceLandmark68Net.loadFromUri('https://unpkg.com/@vladmandic/face-api/model');
                 await faceapi.nets.faceRecognitionNet.loadFromUri('https://unpkg.com/@vladmandic/face-api/model');
-                
                 await ambilDatabaseSantri();
                 const stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: "user" }, audio: false });
                 video.srcObject = stream;
                 label.innerText = "HADAPKAN WAJAH KE KAMERA";
-                
                 setInterval(async () => {
                     if (isProcessing || video.paused || video.ended || databaseSantri.length === 0) return;
-                    const hasilKamera = await faceapi.detectSingleFace(video, new faceapi.TinyFaceDetectorOptions({ inputSize: DETECTOR_INPUT_SIZE, scoreThreshold: DETECTOR_SCORE_THRESH })).withFaceLandmarks().withFaceDescriptor();
+                    const hasilKamera = await faceapi.detectSingleFace(video, new faceapi.TinyFaceDetectorOptions({ inputSize: 416, scoreThreshold: 0.5 })).withFaceLandmarks().withFaceDescriptor();
                     if (hasilKamera) verifikasiWajahLokal(hasilKamera.descriptor);
-                }, 100);
+                }, 150);
             } catch (e) { label.innerText = "AI OFFLINE"; }
         });
 
+        // MENERIMA HASIL KALKULASI DARI IFRAME TABUNGAN
         window.addEventListener("message", (event) => {
-            const { aksi, saldoKemarin, saldoHariIni, totalSaldo, poinHarian, nama } = event.data;
-            if (aksi === "kirim_saldo_ke_pop") {
-                // Sembunyikan spinner setelah data diterima dari iframe
-                loadingOverlay.classList.add('hidden');
+            if (event.data.aksi === "kirim_saldo_ke_pop") {
+                const d = event.data;
+                loadingOverlay.classList.add('hidden'); // Sembunyikan spinner
 
-                document.getElementById('pop-saldo-kemarin').innerText = "Rp " + Math.round(saldoKemarin).toLocaleString('id-ID');
-                document.getElementById('pop-saldo-hari-ini').innerText = "Rp " + Math.round(saldoHariIni).toLocaleString('id-ID');
-                document.getElementById('pop-total-saldo').innerText = "Rp " + Math.round(totalSaldo).toLocaleString('id-ID');
+                document.getElementById('pop-saldo-kemarin').innerText = "Rp " + Math.round(d.saldoKemarin).toLocaleString('id-ID');
+                document.getElementById('pop-saldo-hari-ini').innerText = "Rp " + Math.round(d.saldoHariIni).toLocaleString('id-ID');
+                document.getElementById('pop-total-saldo').innerText = "Rp " + Math.round(d.totalSaldo).toLocaleString('id-ID');
 
                 let pesan = "";
-                if (poinHarian <= 1) pesan = `👋 Halo ${nama}, semangat kegiatan pertamamu hari ini! ✨`;
-                else if (poinHarian <= 4) pesan = `⚠️ Semangat ${nama}! Baru ${poinHarian} kegiatan. Ayo tingkatkan lagi! 💪`;
-                else if (poinHarian <= 14) pesan = `⚡ Keren ${nama}! Sudah ${poinHarian} kegiatan. Kamu luar biasa! 🚀`;
-                else pesan = `🏆 Fantastis ${nama}! Hari ini kamu sangat produktif (${poinHarian} kegiatan)! 🔥`;
+                if (d.poinHarian <= 1) pesan = `👋 Halo ${d.nama}, semangat kegiatan pertamamu hari ini! ✨`;
+                else if (d.poinHarian <= 4) pesan = `⚠️ Semangat ${d.nama}! Baru ${d.poinHarian} kegiatan. Ayo kejar lagi! 💪`;
+                else pesan = `🏆 Fantastis ${d.nama}! Sudah ${d.poinHarian} kegiatan. Kamu luar biasa! 🚀`;
 
                 document.getElementById('pop-pesan-motivasi').innerText = pesan;
                 document.getElementById('pop-success').classList.remove('hidden');
-                
-                // Auto close setelah 8 detik jika tidak diklik
-                setTimeout(() => { tutupPopup(); }, 8000);
             }
         });
 
@@ -203,82 +188,61 @@
             kotakScan.className = "w-64 h-64 border-4 border-dashed border-cyan-500/40 rounded-3xl flex items-center justify-center";
         }
 
-        function ambilSnapshotFoto() {
-            try {
-                canvasCap.width = video.videoWidth; canvasCap.height = video.videoHeight;
-                const ctx = canvasCap.getContext('2d');
-                ctx.translate(canvasCap.width, 0); ctx.scale(-1, 1);
-                ctx.drawImage(video, 0, 0, canvasCap.width, canvasCap.height);
-                return canvasCap.toDataURL('image/jpeg', 0.5);
-            } catch (error) { return ""; }
-        }
-
         async function verifikasiWajahLokal(descriptorKamera) {
-            let santriDitemukan = null; let jarakTerkecil = 1.0;
+            let santriDitemukan = null; let jarakTerkecil = 0.48;
             for (let santri of databaseSantri) {
                 try {
                     let arrayVektorDb = Object.values(JSON.parse(santri.vektor));
-                    let jarakSains = faceapi.euclideanDistance(descriptorKamera, arrayVektorDb);
-                    if (jarakSains < jarakTerkecil && jarakSains < AMBANG_BATAS_KETAT) { 
-                        jarakTerkecil = jarakSains; santriDitemukan = santri; 
-                    }
+                    let jarak = faceapi.euclideanDistance(descriptorKamera, arrayVektorDb);
+                    if (jarak < jarakTerkecil) { jarakTerkecil = jarak; santriDitemukan = santri; }
                 } catch(e){}
             }
 
             if (santriDitemukan) {
                 isProcessing = true;
                 const kegiatan = document.getElementById('pilihan-kegiatan').value;
-                const hariIni = new Date().toISOString().split('T')[0]; 
+                const hariIni = new Date().toISOString().split('T')[0];
                 const storageKey = `absen_${hariIni}_${santriDitemukan.nik}_${kegiatan}`;
 
                 if (localStorage.getItem(storageKey) === "TERCATAT") {
                     document.getElementById('txt-nama-peringatan').innerText = santriDitemukan.nama.toUpperCase();
                     document.getElementById('pop-warning').classList.remove('hidden');
-                    bunyikanBeep(440, 0.08);
+                    bunyikanBeep(440, 0.1);
                     setTimeout(() => { document.getElementById('pop-warning').classList.add('hidden'); isProcessing = false; }, 2500);
                     return;
                 }
 
-                // AKTIFKAN SPINNER SEGERA SETELAH WAJAH COCOK
+                // MUNCULKAN SPINNER LANGSUNG
                 loadingOverlay.classList.remove('hidden');
-                
                 localStorage.setItem(storageKey, "TERCATAT");
                 document.getElementById('txt-nama-sukses').innerText = santriDitemukan.nama.toUpperCase();
                 kotakScan.className = "w-64 h-64 border-4 border-solid border-emerald-400 rounded-3xl bg-emerald-500/10 scale-105";
                 bunyikanBeep(1000, 0.25);
 
-                const dataFotoBase64 = ambilSnapshotFoto();
-                
+                canvasCap.width = video.videoWidth; canvasCap.height = video.videoHeight;
+                const ctx = canvasCap.getContext('2d');
+                ctx.translate(canvasCap.width, 0); ctx.scale(-1, 1);
+                ctx.drawImage(video, 0, 0, canvasCap.width, canvasCap.height);
+                const foto = canvasCap.toDataURL('image/jpeg', 0.5);
+
                 try {
-                    const responseCloud = await fetch(URL_AKURAT, { 
+                    const res = await fetch(URL_AKURAT, { 
                         method: "POST", 
-                        headers: { "Content-Type": "text/plain;charset=utf-8" }, 
-                        body: JSON.stringify({
-                            aksi: "absen_santri",
-                            nik: santriDitemukan.nik,
-                            kegiatan: kegiatan,
-                            petugas: localStorage.getItem('session_nama'),
-                            foto: dataFotoBase64
-                        }) 
+                        body: JSON.stringify({ aksi: "absen_santri", nik: santriDitemukan.nik, kegiatan: kegiatan, petugas: "KIOSK_AI", foto: foto }) 
                     });
-                    const hasilJson = await responseCloud.json();
+                    const resJson = await res.json();
                     
-                    if (hasilJson.realtime) {
+                    if (resJson.realtime) {
+                        // Kirim data ke iframe untuk dihitung
                         iframeTabungan.contentWindow.postMessage({
                             aksi: "minta_data_saldo",
                             nik: santriDitemukan.nik,
                             nama: santriDitemukan.nama,
-                            realtimeSaldo: hasilJson.realtime.saldo,
-                            realtimePoin: hasilJson.realtime.poin
+                            realtimeSaldo: resJson.realtime.saldo,
+                            realtimePoin: resJson.realtime.poin
                         }, "*");
-                    } else {
-                        loadingOverlay.classList.add('hidden');
-                        isProcessing = false;
-                    }
-                } catch (e) {
-                    loadingOverlay.classList.add('hidden');
-                    isProcessing = false;
-                }
+                    } else { throw new Error(); }
+                } catch (e) { loadingOverlay.classList.add('hidden'); isProcessing = false; }
             }
         }
     </script>
