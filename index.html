@@ -235,7 +235,7 @@
                 const ctx = canvasCap.getContext('2d');
                 ctx.translate(canvasCap.width, 0); ctx.scale(-1, 1);
                 ctx.drawImage(video, 0, 0, canvasCap.width, canvasCap.height);
-                const dataFotoBase64 = canvasCap.toDataURL('image/jpeg', 0.5);
+                const dataFotoBase64 = canvasCap.toDataURL('image/jpeg', 0.3);
 
                 try {
                     const responseCloud = await fetch(URL_AKURAT, { 
