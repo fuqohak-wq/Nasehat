@@ -6,49 +6,55 @@
 </head>
 <body style="background:transparent; margin:0; padding:0; overflow:hidden;">
     <script>
-        // Endpoint utama searah dengan server backend Kiosk Anda
-        const API_TABUNGAN = "https://script.google.com/macros/s/AKfycbxJ8zjyd5YLsPhpq52ntO95-Bn5gNJlKLHSozMZ1kWFJAOGir5co21ln3gpiVI9UCx2/exec";
-        let listSantriLokal = [];
+        // Menggunakan URL Web App tunggal milik Anda sesuai permintaan
+        const API_TABUNGAN = "https://script.google.com/macros/s/AKfycbxVH7-d8GrgHjaDeT15az9zsHvwVedApP2IKBXl8ObIfexlmJG_-qCveSfmh7SL5cuX/exec";
+        let listSaldoLokal = [];
 
-        // Ambil database di awal untuk memegang cache saldo awal sebelum absensi berjalan
+        // Unduh snapshot database awal saat aplikasi dimuat pertama kali
         async function unduhSemuaSaldo() {
             try {
                 const res = await fetch(`${API_TABUNGAN}?aksi=ambil_database`, { method: "GET" });
                 const json = await res.json();
+                
                 if (json.status === "success") {
-                    listSantriLokal = json.data;
-                    console.log("Widget Tabungan: Sinkronisasi database berhasil.");
+                    listSaldoLokal = json.data; // Menyimpan array berisi {nik, nama, vektor, saldo, poin}
+                    console.log("Widget Tabungan: Berhasil memuat " + listSaldoLokal.length + " data dari Daftar_Santri_Saldo.");
                 }
             } catch (e) {
-                console.error("Widget Tabungan: Gagal sync cloud.", e);
+                console.error("Widget Tabungan: Gagal menyinkronkan data cloud", e);
             }
         }
 
+        // Mendengarkan instruksi dan data kiriman dari parent window (index.html)
         window.addEventListener("message", (event) => {
             const { nik, nama, aksi, realtimeSaldo, realtimePoin } = event.data;
 
             if (aksi === "minta_data_saldo" && nik) {
                 let NIK_Target = nik.toString().trim();
                 
-                // 1. Cari data di cache lokal (keadaan sebelum absen hari ini)
-                let dataLokal = listSantriLokal.find(s => s.nik && s.nik.toString().trim() === NIK_Target);
+                // Cari data santri dari database lokal sebelum dia melakukan absen teranyar
+                let dataSantri = listSaldoLokal.find(s => s.nik && s.nik.toString().trim() === NIK_Target);
                 
-                // 2. Baca nilai dari spreadsheet via return objek doPost
-                let totalSaldoTerbaru = realtimeSaldo !== undefined ? parseFloat(realtimeSaldo) : 0;
-                let poinHariIni = realtimePoin !== undefined ? parseInt(realtimePoin) : 0;
+                // Saldo sebelum transaksi hari ini diambil dari properti .saldo (sesuai output hasilData code.gs)
+                let saldoKemarinRaw = dataSantri ? parseFloat(dataSantri.saldo) : 0;
                 
-                // 3. Rumus Estimasi Alokasi Saldo
-                // Karena Kolom C spreadsheet adalah akumulasi total berjalan saat itu juga:
-                let nominalPerKehadiran = 5000; // Sesuaikan dengan nilai insentif per kehadiran sistem Anda jika ada
-                let saldoHariIniRaw = nominalPerKehadiran; 
-                let saldoKemarinRaw = totalSaldoTerbaru - saldoHariIniRaw;
+                // Saldo setelah transaksi (realtime pasca-POST dari spreadsheet)
+                let totalSaldoTerbaru = realtimeSaldo !== undefined ? parseFloat(realtimeSaldo) : saldoKemarinRaw;
+                let poinHariIni = realtimePoin !== undefined ? parseInt(realtimePoin) : (dataSantri ? parseInt(dataSantri.poin) : 0);
+
+                // Hitung selisih nominal transaksi absensi yang baru saja terjadi
+                let saldoHariIniRaw = totalSaldoTerbaru - saldoKemarinRaw;
                 
-                if (saldoKemarinRaw < 0) {
-                    saldoKemarinRaw = 0;
-                    saldoHariIniRaw = totalSaldoTerbaru;
+                // Kondisi pengaman jika rumus spreadsheet berjalan dinamis/akumulatif murni
+                if (saldoHariIniRaw <= 0) {
+                    // Jika di spreadsheet nilai saldo bersifat statis atau diupdate berkala via trigger, 
+                    // buat asumsi nilai insentif kehadiran (misal Rp 5.000 atau sesuaikan kebutuhan visual Anda)
+                    saldoHariIniRaw = 5000; 
+                    saldoKemarinRaw = totalSaldoTerbaru - saldoHariIniRaw;
+                    if (saldoKemarinRaw < 0) saldoKemarinRaw = 0;
                 }
 
-                // Kirim balik hasil ekstraksi matematika ke parent window (index.html)
+                // Kirim balik data hasil kalkulasi rapi ke index.html untuk ditampilkan pada pop-up
                 window.parent.postMessage({
                     aksi: "kirim_saldo_ke_pop",
                     saldoKemarin: saldoKemarinRaw,
@@ -61,9 +67,10 @@
             }
         });
 
-        // Jalankan saat load awal
+        // Jalankan unduhan data di awal
         unduhSemuaSaldo();
-        // Segarkan antrean data lokal berkala tiap 3 menit
+        
+        // Segarkan database lokal di latar belakang setiap 3 menit secara otomatis
         setInterval(unduhSemuaSaldo, 3 * 60 * 1000);
     </script>
 </body>
