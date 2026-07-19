@@ -2,23 +2,20 @@
 <html lang="id">
 <head>
     <meta charset="UTF-8">
-    <script src="https://cdn.jsdelivr.net/npm/@tailwindcss/browser@4"></script>
+    <title>Widget Pengolah Data Tabungan</title>
 </head>
-<body class="bg-transparent overflow-hidden text-slate-100">
-
+<body style="background:transparent; margin:0; padding:0; overflow:hidden;">
     <script>
-        // Gunakan URL Web App Tabungan Anda
+        // Menggunakan URL Web App tunggal milik Anda
         const API_TABUNGAN = "https://script.google.com/macros/s/AKfycbxVH7-d8GrgHjaDeT15az9zsHvwVedApP2IKBXl8ObIfexlmJG_-qCveSfmh7SL5cuX/exec";
         let listSaldoLokal = [];
 
         async function unduhSemuaSaldo() {
             try {
-                // Panggil endpoint Apps Script Tabungan
                 const res = await fetch(`${API_TABUNGAN}?aksi=ambil_database`, { method: "GET" });
                 const json = await res.json();
                 
                 if (json.status === "success") {
-                    // Simpan response database saldo ke memori lokal iframe
                     listSaldoLokal = json.data;
                     console.log("Widget Tabungan: Berhasil sinkronisasi " + listSaldoLokal.length + " data.");
                 }
@@ -28,24 +25,24 @@
         }
 
         window.addEventListener("message", (event) => {
-            const { nik, nama, aksi } = event.data;
+            const { nik, nama, aksi, realtimeSaldo, realtimePoin } = event.data;
 
             if (aksi === "minta_data_saldo" && nik) {
                 let NIK_Target = nik.toString().trim();
-                
-                // OPTIMASI: Pencarian linear cepat menggunakan pembersihan string instan
                 let dataSantri = listSaldoLokal.find(s => s.nik && s.nik.toString().trim() == NIK_Target);
                 
-                let saldoFinal = dataSantri ? dataSantri.tabungan : 0;
+                // DIPERBAIKI: Mengambil properti .saldo (bukan .tabungan) agar sinkron dengan code.gs
+                let saldoKemarinRaw = dataSantri ? parseFloat(dataSantri.saldo) : 0;
                 
-                // PENTING: Jika data poin di kolom K tersedia di server tabungan, ambil nilainya
-                // Asumsi properti dari web app tabungan memuat data kolom K (kita sesuaikan di Apps Script Tabungan jika perlu)
-                let poinHariIni = dataSantri && dataSantri.poin !== undefined ? parseInt(dataSantri.poin) : 0;
+                // Ambil data realtime pasca-POST jika dilempar dari parent window
+                let saldoHariIniRaw = realtimeSaldo !== undefined ? parseFloat(realtimeSaldo) : 0;
+                let poinHariIni = realtimePoin !== undefined ? parseInt(realtimePoin) : (dataSantri ? parseInt(dataSantri.poin) : 0);
 
-                // Kirim balik data Saldo DAN Poin Harian ke index.html secara realtime
+                // Kirim balik hasil komputasi final ke index.html
                 window.parent.postMessage({
                     aksi: "kirim_saldo_ke_pop",
-                    saldoRaw: saldoFinal,
+                    saldoKemarin: saldoKemarinRaw,
+                    saldoHariIni: saldoHariIniRaw,
                     nama: nama,
                     nik: NIK_Target,
                     poinHarian: poinHariIni
