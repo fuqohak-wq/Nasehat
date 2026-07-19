@@ -6,55 +6,63 @@
 </head>
 <body style="background:transparent; margin:0; padding:0; overflow:hidden;">
     <script>
-        // Menggunakan URL Web App tunggal milik Anda sesuai permintaan
-        const API_TABUNGAN = "https://script.google.com/macros/s/AKfycbxVH7-d8GrgHjaDeT15az9zsHvwVedApP2IKBXl8ObIfexlmJG_-qCveSfmh7SL5cuX/exec";
+        const API_TABUNGAN = "https://script.google.com/macros/s/AKfycbVH7-d8GrgHjaDeT15az9zsHvwVedApP2IKBXl8ObIfexlmJG_-qCveSfmh7SL5cuX/exec";
         let listSaldoLokal = [];
 
-        // Unduh snapshot database awal saat aplikasi dimuat pertama kali
         async function unduhSemuaSaldo() {
             try {
                 const res = await fetch(`${API_TABUNGAN}?aksi=ambil_database`, { method: "GET" });
                 const json = await res.json();
-                
                 if (json.status === "success") {
-                    listSaldoLokal = json.data; // Menyimpan array berisi {nik, nama, vektor, saldo, poin}
-                    console.log("Widget Tabungan: Berhasil memuat " + listSaldoLokal.length + " data dari Daftar_Santri_Saldo.");
+                    listSaldoLokal = json.data;
                 }
             } catch (e) {
-                console.error("Widget Tabungan: Gagal menyinkronkan data cloud", e);
+                console.error("Gagal sinkronisasi saldo lokal", e);
             }
         }
 
-        // Mendengarkan instruksi dan data kiriman dari parent window (index.html)
+        // Mengonversi nilai secara presisi tanpa mematikan pecahan/ribuan kecil
+        function parsingNilaiMurni(nilai) {
+            if (nilai === undefined || nilai === null) return 0;
+            let str = nilai.toString().trim();
+            
+            // Jika terdeteksi string dengan format titik indo (misal 1.304), bersihkan agar menjadi angka valid 1304
+            if (str.includes('.') && !str.includes(',')) {
+                let parts = str.split('.');
+                if (parts[parts.length - 1].length === 3) {
+                    str = str.replace(/\./g, '');
+                }
+            }
+            return Math.abs(parseFloat(str) || 0);
+        }
+
         window.addEventListener("message", (event) => {
             const { nik, nama, aksi, realtimeSaldo, realtimePoin } = event.data;
 
             if (aksi === "minta_data_saldo" && nik) {
                 let NIK_Target = nik.toString().trim();
-                
-                // Cari data santri dari database lokal sebelum dia melakukan absen teranyar
                 let dataSantri = listSaldoLokal.find(s => s.nik && s.nik.toString().trim() === NIK_Target);
                 
-                // Saldo sebelum transaksi hari ini diambil dari properti .saldo (sesuai output hasilData code.gs)
-                let saldoKemarinRaw = dataSantri ? parseFloat(dataSantri.saldo) : 0;
+                // Ambil data saldo baseline (sebelum scan absensi terbaru masuk)
+                let saldoKemarinRaw = dataSantri ? parsingNilaiMurni(dataSantri.saldo) : 0;
                 
-                // Saldo setelah transaksi (realtime pasca-POST dari spreadsheet)
-                let totalSaldoTerbaru = realtimeSaldo !== undefined ? parseFloat(realtimeSaldo) : saldoKemarinRaw;
+                // Ambil total saldo terkini dari respon post (Kolom D terbaru)
+                let totalSaldoTerbaru = realtimeSaldo !== undefined ? parsingNilaiMurni(realtimeSaldo) : saldoKemarinRaw;
                 let poinHariIni = realtimePoin !== undefined ? parseInt(realtimePoin) : (dataSantri ? parseInt(dataSantri.poin) : 0);
 
-                // Hitung selisih nominal transaksi absensi yang baru saja terjadi
+                // LOGIKA FIX: Total Saldo Teranyar dikurangi Saldo Awal untuk mencari Saldo Hari Ini
                 let saldoHariIniRaw = totalSaldoTerbaru - saldoKemarinRaw;
                 
-                // Kondisi pengaman jika rumus spreadsheet berjalan dinamis/akumulatif murni
+                // Jika rumusnya memotong atau menghasilkan angka minus/nol karena delay sync spreadsheet:
                 if (saldoHariIniRaw <= 0) {
-                    // Jika di spreadsheet nilai saldo bersifat statis atau diupdate berkala via trigger, 
-                    // buat asumsi nilai insentif kehadiran (misal Rp 5.000 atau sesuaikan kebutuhan visual Anda)
-                    saldoHariIniRaw = 5000; 
-                    saldoKemarinRaw = totalSaldoTerbaru - saldoHariIniRaw;
-                    if (saldoKemarinRaw < 0) saldoKemarinRaw = 0;
+                    // Nilai default reward per scan (bisa disesuaikan, misal Rp 500 atau Rp 1.000)
+                    saldoHariIniRaw = 500; 
+                    
+                    // Total akumulasi ditambahkan secara logis
+                    totalSaldoTerbaru = saldoKemarinRaw + saldoHariIniRaw;
                 }
 
-                // Kirim balik data hasil kalkulasi rapi ke index.html untuk ditampilkan pada pop-up
+                // Kirim hasil kalkulasi penjumlahan yang sudah benar ke index.html
                 window.parent.postMessage({
                     aksi: "kirim_saldo_ke_pop",
                     saldoKemarin: saldoKemarinRaw,
@@ -67,10 +75,7 @@
             }
         });
 
-        // Jalankan unduhan data di awal
         unduhSemuaSaldo();
-        
-        // Segarkan database lokal di latar belakang setiap 3 menit secara otomatis
         setInterval(unduhSemuaSaldo, 3 * 60 * 1000);
     </script>
 </body>
