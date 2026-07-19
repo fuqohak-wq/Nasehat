@@ -13,7 +13,7 @@
     <!-- Memanggil tabungan.html secara asinkron di latar belakang -->
     <iframe id="iframe-tabungan" src="tabungan.html" class="hidden"></iframe>
 
-    <!-- SPINNER LOADING OVERLAY (MEMBUAT PROSES SCAN LEBIH DINAMIS & DIALIRKAN DENGAN CEPAT) -->
+    <!-- SPINNER LOADING OVERLAY -->
     <div id="pop-loading" class="fixed inset-0 bg-slate-950/80 backdrop-blur-sm flex flex-col items-center justify-center gap-4 hidden z-50">
         <div class="w-14 h-14 border-4 border-t-cyan-500 border-r-transparent border-b-cyan-500 border-l-transparent rounded-full animate-spin"></div>
         <p class="text-xs font-black text-cyan-400 uppercase tracking-widest animate-pulse">Memproses Absensi & Saldo...</p>
@@ -103,8 +103,8 @@
     </div>
 
     <script>
-        // Endpoint tunggal yang telah disamakan dengan backend apps script Anda
-        const URL_ABSENSI = "https://script.google.com/macros/s/AKfycbVH7-d8GrgHjaDeT15az9zsHvwVedApP2IKBXl8ObIfexlmJG_-qCveSfmh7SL5cuX/exec"; 
+        // MASUKKAN URL WEB APP HASIL RE-DEPLOY TERBARU DI SINI
+        const URL_ABSENSI = "PASTE_URL_WEB_APP_BARU_DISINI"; 
 
         let video = document.getElementById('video-selfie');
         let label = document.getElementById('instruksi');
@@ -146,6 +146,8 @@
                     databaseSantri = json.data;
                     dbStatus.innerText = `🟢 Kiosk Ready (${databaseSantri.length} Santri)`;
                     dbStatus.classList.remove('animate-pulse');
+                } else {
+                    dbStatus.innerText = `⚠️ Cloud Error`;
                 }
             } catch (error) {
                 dbStatus.innerText = `⚠️ Cloud Error`;
@@ -174,12 +176,10 @@
             } catch (e) { label.innerText = "AI OFFLINE"; }
         });
 
-        // MENERIMA DATA YANG SUDAH DIOLAH DI DALAM IFRAME TABUNGAN
         window.addEventListener("message", (event) => {
             const { aksi, saldoKemarin, saldoHariIni, totalSaldo, poinHarian, nama } = event.data;
 
             if (aksi === "kirim_saldo_ke_pop") {
-                // Sembunyikan spinner sesaat setelah data tabungan selesai dihitung
                 popLoading.classList.add('hidden');
 
                 let bersihKemarin = Math.abs(Math.round(parseFloat(saldoKemarin) || 0));
@@ -218,7 +218,6 @@
                 const ctx = canvasCap.getContext('2d');
                 ctx.translate(canvasCap.width, 0); ctx.scale(-1, 1);
                 ctx.drawImage(video, 0, 0, canvasCap.width, canvasCap.height);
-                // Dipercepat dengan kompresi data string gambar 0.4
                 return canvasCap.toDataURL('image/jpeg', 0.4); 
             } catch (error) { return ""; }
         }
@@ -253,7 +252,6 @@
                     return;
                 }
 
-                // AKTIFKAN SPINNER INSTAN SAAT MATCH WAJAH TERDETEKSI
                 popLoading.classList.remove('hidden');
                 localStorage.setItem(storageKey, "TERCATAT");
                 document.getElementById('txt-nama-sukses').innerText = santriDitemukan.nama.toUpperCase();
