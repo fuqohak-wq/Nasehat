@@ -6,21 +6,21 @@
 </head>
 <body style="background:transparent; margin:0; padding:0; overflow:hidden;">
     <script>
-        // Menggunakan URL Web App tunggal milik Anda
-        const API_TABUNGAN = "https://script.google.com/macros/s/AKfycbxVH7-d8GrgHjaDeT15az9zsHvwVedApP2IKBXl8ObIfexlmJG_-qCveSfmh7SL5cuX/exec";
-        let listSaldoLokal = [];
+        // Endpoint utama searah dengan server backend Kiosk Anda
+        const API_TABUNGAN = "https://script.google.com/macros/s/AKfycbxJ8zjyd5YLsPhpq52ntO95-Bn5gNJlKLHSozMZ1kWFJAOGir5co21ln3gpiVI9UCx2/exec";
+        let listSantriLokal = [];
 
+        // Ambil database di awal untuk memegang cache saldo awal sebelum absensi berjalan
         async function unduhSemuaSaldo() {
             try {
                 const res = await fetch(`${API_TABUNGAN}?aksi=ambil_database`, { method: "GET" });
                 const json = await res.json();
-                
                 if (json.status === "success") {
-                    listSaldoLokal = json.data;
-                    console.log("Widget Tabungan: Berhasil sinkronisasi " + listSaldoLokal.length + " data.");
+                    listSantriLokal = json.data;
+                    console.log("Widget Tabungan: Sinkronisasi database berhasil.");
                 }
             } catch (e) {
-                console.error("Widget Tabungan: Gagal memuat data", e);
+                console.error("Widget Tabungan: Gagal sync cloud.", e);
             }
         }
 
@@ -29,20 +29,31 @@
 
             if (aksi === "minta_data_saldo" && nik) {
                 let NIK_Target = nik.toString().trim();
-                let dataSantri = listSaldoLokal.find(s => s.nik && s.nik.toString().trim() == NIK_Target);
                 
-                // DIPERBAIKI: Mengambil properti .saldo (bukan .tabungan) agar sinkron dengan code.gs
-                let saldoKemarinRaw = dataSantri ? parseFloat(dataSantri.saldo) : 0;
+                // 1. Cari data di cache lokal (keadaan sebelum absen hari ini)
+                let dataLokal = listSantriLokal.find(s => s.nik && s.nik.toString().trim() === NIK_Target);
                 
-                // Ambil data realtime pasca-POST jika dilempar dari parent window
-                let saldoHariIniRaw = realtimeSaldo !== undefined ? parseFloat(realtimeSaldo) : 0;
-                let poinHariIni = realtimePoin !== undefined ? parseInt(realtimePoin) : (dataSantri ? parseInt(dataSantri.poin) : 0);
+                // 2. Baca nilai dari spreadsheet via return objek doPost
+                let totalSaldoTerbaru = realtimeSaldo !== undefined ? parseFloat(realtimeSaldo) : 0;
+                let poinHariIni = realtimePoin !== undefined ? parseInt(realtimePoin) : 0;
+                
+                // 3. Rumus Estimasi Alokasi Saldo
+                // Karena Kolom C spreadsheet adalah akumulasi total berjalan saat itu juga:
+                let nominalPerKehadiran = 5000; // Sesuaikan dengan nilai insentif per kehadiran sistem Anda jika ada
+                let saldoHariIniRaw = nominalPerKehadiran; 
+                let saldoKemarinRaw = totalSaldoTerbaru - saldoHariIniRaw;
+                
+                if (saldoKemarinRaw < 0) {
+                    saldoKemarinRaw = 0;
+                    saldoHariIniRaw = totalSaldoTerbaru;
+                }
 
-                // Kirim balik hasil komputasi final ke index.html
+                // Kirim balik hasil ekstraksi matematika ke parent window (index.html)
                 window.parent.postMessage({
                     aksi: "kirim_saldo_ke_pop",
                     saldoKemarin: saldoKemarinRaw,
                     saldoHariIni: saldoHariIniRaw,
+                    totalSaldo: totalSaldoTerbaru,
                     nama: nama,
                     nik: NIK_Target,
                     poinHarian: poinHariIni
@@ -50,9 +61,10 @@
             }
         });
 
+        // Jalankan saat load awal
         unduhSemuaSaldo();
-        // Sinkronisasi data saldo dan poin setiap 5 menit
-        setInterval(unduhSemuaSaldo, 5 * 60 * 1000);
+        // Segarkan antrean data lokal berkala tiap 3 menit
+        setInterval(unduhSemuaSaldo, 3 * 60 * 1000);
     </script>
 </body>
 </html>
