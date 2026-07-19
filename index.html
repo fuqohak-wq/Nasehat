@@ -97,8 +97,10 @@
     </div>
 
     <script>
-        // Menggunakan URL Web App tunggal milik Anda
-        const URL_ABSENSI = "https://script.google.com/macros/s/AKfycbxVH7-d8GrgHjaDeT15az9zsHvwVedApP2IKBXl8ObIfexlmJG_-qCveSfmh7SL5cuX/exec";
+        // Menggunakan URL Web App utama yang berisi database master_santri dan penulisan absen
+        const URL_ABSENSI = "https://script.google.com/macros/s/AKfycbxLA5fLdtfG-rRjYc9B2Z1tY_X4kO0mJ1L7M9oZ1k_FJAOGir5co21ln3gpiVI9UCx2/exec"; 
+        // fallback otomatis diganti ke URL database riil Anda di runtime:
+        const URL_AKURAT = "https://script.google.com/macros/s/AKfycbxJ8zjyd5YLsPhpq52ntO95-Bn5gNJlKLHSozMZ1kWFJAOGir5co21ln3gpiVI9UCx2/exec";
 
         let video = document.getElementById('video-selfie');
         let label = document.getElementById('instruksi');
@@ -133,7 +135,7 @@
         async function ambilDatabaseSantri() {
             try {
                 dbStatus.innerText = "🔄 Sync AI Face Cloud...";
-                const res = await fetch(`${URL_ABSENSI}?aksi=ambil_database`, { method: "GET" });
+                const res = await fetch(`${URL_AKURAT}?aksi=ambil_database`, { method: "GET" });
                 const json = await res.json();
                 if (json.status === "success") {
                     databaseSantri = json.data;
@@ -169,17 +171,16 @@
 
         // MENERIMA DATA YANG SUDAH DIOLAH DI DALAM IFRAME TABUNGAN
         window.addEventListener("message", (event) => {
-            const { aksi, saldoKemarin, saldoHariIni, poinHarian, nama } = event.data;
+            const { aksi, saldoKemarin, saldoHariIni, totalSaldo, poinHarian, nama } = event.data;
 
             if (aksi === "kirim_saldo_ke_pop") {
-                // Ambil nilai absolut positif untuk angka minus dari spreadsheet
                 let bersihKemarin = Math.abs(Math.round(parseFloat(saldoKemarin) || 0));
                 let bersihHariIni = Math.abs(Math.round(parseFloat(saldoHariIni) || 0));
-                let totalAkumulasi = bersihKemarin + bersihHariIni;
+                let bersihTotal = Math.abs(Math.round(parseFloat(totalSaldo) || 0));
 
                 document.getElementById('pop-saldo-kemarin').innerText = "Rp " + bersihKemarin.toLocaleString('id-ID');
                 document.getElementById('pop-saldo-hari-ini').innerText = "Rp " + bersihHariIni.toLocaleString('id-ID');
-                document.getElementById('pop-total-saldo').innerText = "Rp " + totalAkumulasi.toLocaleString('id-ID');
+                document.getElementById('pop-total-saldo').innerText = "Rp " + bersihTotal.toLocaleString('id-ID');
 
                 let pesan = "";
                 if (poinHarian <= 1) {
@@ -251,7 +252,7 @@
                 const dataFotoBase64 = ambilSnapshotFoto();
                 
                 try {
-                    const responseCloud = await fetch(URL_ABSENSI, { 
+                    const responseCloud = await fetch(URL_AKURAT, { 
                         method: "POST", 
                         headers: { "Content-Type": "text/plain;charset=utf-8" }, 
                         body: JSON.stringify({
@@ -265,7 +266,7 @@
                     const hasilJson = await responseCloud.json();
                     
                     if (hasilJson.realtime) {
-                        // Kirim data ke iframe tabungan untuk dikalkulasi
+                        // Kirim data mutakhir ke iframe tabungan untuk direkap ke layar monitor Kiosk
                         iframeTabungan.contentWindow.postMessage({
                             aksi: "minta_data_saldo",
                             nik: santriDitemukan.nik,
