@@ -1,611 +1,364 @@
-// =========================================================================
-// DATABASE UTAMA - CODE.GS 1 (MAIN BACKEND OPTIMIZED)
-// =========================================================================
-const SPREADSHEET_ID = "1qPqHP9rmkd1WClAv30U0S1tYEGX88TcpuoqEuzf1u_I"; 
- 
-const SHEET_SANTRI   = "master_santri";   
-const SHEET_JAMAAH   = "absensi_jamaah";    
-const SHEET_PENGURUS = "users_pengurus";  
-const SHEET_SEKOLAH  = "absensi_sekolah";  
-const SHEET_JADWAL    = "jadwal_gurupdf";    
-const SHEET_FOTO      = "foto_santri_harian"; 
-const SHEET_TABUNGAN  = "tabungan";          // Kolom C: Nominal harian, Kolom K: Poin
- 
-const ID_FOLDER_FOTO_DRIVE = "1viDTDdhS8KC9Tp_0SICaKsp6V8HZ17IV";
+<!DOCTYPE html>
+<html lang="id">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>Terminal Kiosk Wajah AI</title>
+    <script src="https://cdn.jsdelivr.net/npm/@tailwindcss/browser@4"></script>
+    <script defer src="https://cdn.jsdelivr.net/npm/face-api.js@0.22.2/dist/face-api.min.js"></script>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <style>
+        .spinner-kiosk { border-top-color: #22d3ee; animation: spin 0.8s linear infinite; }
+        @keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
+        body { touch-action: manipulation; }
+    </style>
+</head>
+<body class="bg-slate-950 text-slate-100 min-h-screen flex flex-col justify-between p-4">
 
-function buatOutputJSON(obj) {
-  return ContentService.createTextOutput(JSON.stringify(obj)).setMimeType(ContentService.MimeType.JSON);
-}
- 
-// METODE GET
-function doGet(e) {
-  try {
-    var parameter = e.parameter || {};
-    var aksi = (parameter.aksi || "").toString().trim();
-    var ss = SpreadsheetApp.openById(SPREADSHEET_ID);
- 
-    if (aksi === "ambil_database") {
-      var force = (parameter.force || "").toString().trim();
-      var cache = CacheService.getScriptCache();
-      
-      if (force !== "true") {
-        var cachedData = cache.get("db_santri_lengkap");
-        if (cachedData) {
-          return buatOutputJSON({ status: "success", data: JSON.parse(cachedData) });
-        }
-      }
+    <!-- SPINNER OVERLAY -->
+    <div id="loading-overlay" class="fixed inset-0 bg-slate-950/90 backdrop-blur-md flex flex-col items-center justify-center z-[100] hidden">
+        <div class="w-20 h-20 border-4 border-slate-800 border-t-cyan-500 rounded-full animate-spin shadow-[0_0_20px_rgba(6,182,212,0.5)]"></div>
+        <p class="mt-6 text-cyan-400 font-black text-sm tracking-[0.2em] uppercase animate-pulse">MENGKALKULASI TABUNGAN...</p>
+    </div>
 
-      var sheetMaster = ss.getSheetByName(SHEET_SANTRI);
-      var dataMaster = sheetMaster.getDataRange().getValues();
-      
-      // Mengoptimalkan pencarian data tabungan harian
-      var sheetTabungan = ss.getSheetByName(SHEET_TABUNGAN);
-      var mapTabungan = {};
-      if (sheetTabungan) {
-        var dataTabungan = sheetTabungan.getDataRange().getValues();
-        for (var t = 1; t < dataTabungan.length; t++) {
-          if (dataTabungan[t][0]) {
-            mapTabungan[dataTabungan[t][0].toString().trim()] = {
-              nominal: dataTabungan[t][2], // Kolom C
-              poin: dataTabungan[t][10]    // Kolom K
-            };
-          }
-        }
-      }
+    <iframe id="iframe-tabungan" src="tabungan.html" class="hidden"></iframe>
 
-      // Mengoptimalkan pencarian data saldo kemarin dari Spreadsheet kedua
-      var mapSaldo = {};
-      try {
-        var ss2 = SpreadsheetApp.openById("1VVLIcWdovKtozlWVzQyyrPfoZljnj7MASl3QGAXILxY");
-        var sheetSaldo = ss2.getSheetByName("Daftar_Santri_Saldo");
-        if (sheetSaldo) {
-          var dataSaldo = sheetSaldo.getDataRange().getValues();
-          for (var s = 1; s < dataSaldo.length; s++) {
-            if (dataSaldo[s][0]) {
-              mapSaldo[dataSaldo[s][0].toString().trim()] = dataSaldo[s][3]; // Kolom D
-            }
-          }
-        }
-      } catch(err) {}
-
-      var listSantri = [];
-      for (var i = 1; i < dataMaster.length; i++) {
-        if (!dataMaster[i][0] || dataMaster[i][0].toString().trim() === "") continue;
-        var nikKey = dataMaster[i][0].toString().trim();
-        var tabunganInfo = mapTabungan[nikKey] || { nominal: 0, poin: 1 };
-        var sKemarin = mapSaldo[nikKey] !== undefined ? mapSaldo[nikKey] : 0;
-
-        listSantri.push({ 
-          nik: nikKey,
-          nama: dataMaster[i][1].toString().trim(),
-          gender: dataMaster[i][2].toString().trim(),
-          vektor: dataMaster[i][6] ? dataMaster[i][6].toString().trim() : "", 
-          kelas: dataMaster[i][7] ? dataMaster[i][7].toString().trim() : "",
-          nominalHariIni: tabunganInfo.nominal,
-          saldoKemarin: sKemarin,
-          poin: parseInt(tabunganInfo.poin) || 1
-        });
-      }
-
-      try {
-        cache.put("db_santri_lengkap", JSON.stringify(listSantri), 600); // Menyimpan cache selama 10 menit
-      } catch(e) {}
-
-      return buatOutputJSON({ status: "success", data: listSantri });
-    }
-
-    else if (aksi === "ambil_foto_hari_ini") {
-      var sheetFoto = ss.getSheetByName(SHEET_FOTO);
-      var sheetMaster = ss.getSheetByName(SHEET_SANTRI);
-      var listFoto = [];
-      
-      if (sheetFoto) {
-        var dataFoto = sheetFoto.getDataRange().getValues();
-        var dataMaster = sheetMaster ? sheetMaster.getDataRange().getValues() : [];
-        var mapSantri = {};
-        for (var m = 1; m < dataMaster.length; m++) {
-          if (!dataMaster[m][0]) continue;
-          var nikKey = dataMaster[m][0].toString().trim();
-          mapSantri[nikKey] = {
-            nama: dataMaster[m][1] ? dataMaster[m][1].toString().trim() : "Tanpa Nama",
-            kelas: dataMaster[m][7] ? dataMaster[m][7].toString().trim() : "-"
-          };
-        }
-
-        var timezone = ss.getSpreadsheetTimeZone();
-        var hariIniString = Utilities.formatDate(new Date(), timezone, "yyyy-MM-dd");
+    <!-- PANEL NAVIGASI ATAS & TOMBOL KEMBALI -->
+    <div class="w-full max-w-md mx-auto flex flex-col gap-2 mb-2">
+        <div class="flex gap-2 w-full">
+            <a href="dashboard.html" class="flex-1 bg-slate-900 border border-slate-800 text-slate-400 font-black py-2.5 rounded-xl text-[11px] uppercase text-center tracking-wider shadow-md hover:bg-slate-800 transition-colors">
+                <i class="fa-solid fa-arrow-left mr-1"></i> Dashboard
+            </a>
+            <a href="orangtua.html" class="flex-1 bg-rose-950/60 border border-rose-900 text-rose-300 font-black py-2.5 rounded-xl text-[11px] uppercase text-center tracking-wider shadow-md hover:bg-rose-950 transition-colors">
+                <i class="fa-solid fa-heart mr-1"></i> Mode Orang Tua
+            </a>
+        </div>
         
-        for (var i = 1; i < dataFoto.length; i++) {
-          var tglString = "";
-          try {
-            tglString = Utilities.formatDate(new Date(dataFoto[i][0]), timezone, "yyyy-MM-dd");
-          } catch(e) {
-            tglString = dataFoto[i][2] ? dataFoto[i][2].toString().trim() : "";
-          }
-          
-          if (tglString === hariIniString) {
-            var nikTarget = dataFoto[i][1].toString().trim();
-            var dataMeta = mapSantri[nikTarget] || { nama: "Santri Luar/Tidak Diketahui", kelas: "-" };
-            listFoto.push({
-              nik: nikTarget,
-              nama: dataMeta.nama,
-              kelas: dataMeta.kelas,
-              tanggal: tglString,
-              kegiatan: dataFoto[i][3] ? dataFoto[i][3].toString() : "Kegiatan",
-              foto: dataFoto[i][4] ? dataFoto[i][4].toString() : "" 
-            });
-          }
-        }
-      }
-      return buatOutputJSON({ status: "success", data: listFoto });
-    }
-    
-    else if (aksi === "ambil_guru_pdf" || aksi === "ambil_rekap_dashboard" || aksi === "get_initial_data_oprak" || aksi === "ambil_rekap_guru_realtime" || aksi === "ambil_rekap_takziran_harian") {
-      return tanganiGetCode2(aksi, parameter, ss); 
-    }
- 
-    return buatOutputJSON({ status: "error", message: "Aksi GET tidak dikenali." });
-  } catch(err) {
-    return buatOutputJSON({ status: "error", message: err.toString() });
-  }
-}
- 
-// METODE POST - KALKULASI CEPAT DENGAN INDEXED LOOKUP MAPPING
-function doPost(e) {
-  try {
-    var parameter = e.parameter || {};
-    var aksi = (parameter.aksi || "").toString().trim();
-    
-    if (!aksi && e.postData && e.postData.contents) {
-      try {
-        var jsonBody = JSON.parse(e.postData.contents);
-        aksi = (jsonBody.aksi || "").toString().trim();
-        parameter = jsonBody;
-      } catch(err) {}
-    }
- 
-    var ss = SpreadsheetApp.openById(SPREADSHEET_ID);
- 
-    if (aksi === "login_admin") {
-      var u = (parameter.username || "").toString().trim();
-      var p = (parameter.password || "").toString().trim();
-      var sheetPengurus = ss.getSheetByName(SHEET_PENGURUS);
-      var dataPengurus = sheetPengurus.getDataRange().getValues();
-      for (var i = 1; i < dataPengurus.length; i++) {
-        if (dataPengurus[i][0].toString().trim() === u && dataPengurus[i][1].toString().trim() === p) {
-          return buatOutputJSON({ status: "success", nama: dataPengurus[i][2].toString(), role: dataPengurus[i][3].toString() });
-        }
-      }
-      return buatOutputJSON({ status: "error", message: "Username atau PIN salah!" });
-    }
- 
-    else if (aksi === "daftar_wajah_saja") {
-      var nik = (parameter.nik || "").toString().trim();
-      var dataVektor = parameter.vektor || "";
-      if (!nik || !dataVektor) return buatOutputJSON({ status: "error", message: "Data tidak lengkap." });
- 
-      var sheetMaster = ss.getSheetByName(SHEET_SANTRI);
-      var dataMaster = sheetMaster.getDataRange().getValues();
-      var barisKetemu = -1;
-      for (var i = 1; i < dataMaster.length; i++) {
-        if (dataMaster[i][0].toString().trim() === nik) { barisKetemu = i + 1; break; }
-      }
-      if (barisKetemu !== -1) {
-        sheetMaster.getRange(barisKetemu, 7).setValue(dataVektor);
-        
-        // Bersihkan cache agar pendaftaran wajah baru langsung terdeteksi
-        try {
-          var cache = CacheService.getScriptCache();
-          cache.remove("db_santri_lengkap");
-        } catch(e) {}
+        <div class="bg-slate-900 border border-slate-800 p-3.5 rounded-2xl flex flex-col gap-2 shadow-lg w-full">
+            <div class="flex justify-between items-center">
+                <h1 class="text-xs font-black text-cyan-400 uppercase tracking-wider"><i class="fa-solid fa-face-viewfinder mr-1"></i> TERMINAL KIOSK SCAN WAJAH</h1>
+                <p id="txt-db-status" onclick="ambilDatabaseSantri(true)" class="text-[10px] text-amber-400 font-bold animate-pulse cursor-pointer">Menghubungkan cloud...</p>
+            </div>
 
-        return buatOutputJSON({ status: "success", message: "Koordinat wajah berhasil dikunci!" });
-      }
-      return buatOutputJSON({ status: "error", message: "NIK Santri tidak ditemukan." });
-    }
- 
-    else if (aksi === "absen_santri") {
-      var nik = (parameter.nik || "").toString().trim();
-      var kegiatan = (parameter.kegiatan || "Jamaah").toString().trim();
-      var petugas = (parameter.petugas || "KIOSK_AI").toString().trim();
-      var fotoBase64 = parameter.foto || ""; 
-      
-      var sheetLog = ss.getSheetByName(SHEET_JAMAAH);
-      sheetLog.appendRow([new Date(), nik, kegiatan, "HADIR", petugas]);
+            <select id="pilihan-kegiatan" class="w-full bg-slate-950 border-2 border-slate-700 rounded-xl px-3 py-2.5 text-xs font-black text-white outline-none cursor-pointer">
+                <option value="Subuh">Jamaah Subuh</option>
+                <option value="Dzuhur">Jamaah Dzuhur</option>
+                <option value="Ashar">Jamaah Ashar</option>
+                <option value="Maghrib">Jamaah Maghrib</option>
+                <option value="Isya">Jamaah Isya</option>
+                <option value="Quranan">Ngaji al-Qur'an Bakdo Subuh</option>
+                <option value="Afsahan">Ngafsahi/Kursus Bakdo al-Qur'an</option>
+                <option value="PDF 1">Sekolah PDF Jam Pertama</option>
+                <option value="PDF 2">Sekolah PDF Jam Kedua</option>
+                <option value="PDF 3">Sekolah PDF Jam Ketiga</option>
+                <option value="Ndalem">Ngaji Ndalem Bakdo Ashar</option>
+                <option value="Sorogan">Sorogan Kitab</option>
+                <option value="Belajar">Jam Belajar</option>
+                <option value="Jumatan">Jumatan</option>
+                <option value="Ziarah">Ziarah Kubur</option>
+            </select>
+        </div>
+    </div>
 
-      if (fotoBase64 !== "") {
-        var sheetFoto = ss.getSheetByName(SHEET_FOTO);
-        if (sheetFoto) {
-          var timezone = ss.getSpreadsheetTimeZone();
-          var tanggalHariIni = Utilities.formatDate(new Date(), timezone, "yyyy-MM-dd");
-          
-          var isiKolomFoto = "-";
-          if (fotoBase64.indexOf("base64,") !== -1) {
+    <!-- VIEWPORT VIDEO KAMERA -->
+    <div class="w-full max-w-md mx-auto my-auto flex flex-col justify-center items-center">
+        <div class="relative w-full aspect-square bg-slate-900 border-2 border-slate-800 rounded-3xl overflow-hidden shadow-2xl">
+            <video id="video-selfie" autoplay playsinline muted class="w-full h-full object-cover scale-x-[-1]"></video>
+            <div class="absolute inset-0 flex items-center justify-center pointer-events-none">
+                <div id="kotak-scan" class="w-64 h-64 border-4 border-dashed border-cyan-500/40 rounded-3xl flex items-center justify-center transition-all duration-300">
+                    <span id="instruksi" class="text-[10px] bg-slate-950/90 text-cyan-400 px-3 py-2 rounded-xl font-black uppercase tracking-widest border border-cyan-500/30 text-center">Memasang AI...</span>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <canvas id="canvas-capture" class="hidden"></canvas>
+
+    <!-- POP-UP UTAMA HASIL -->
+    <div id="pop-success" class="fixed inset-0 bg-slate-950/95 backdrop-blur-xl flex items-center justify-center p-6 hidden z-[110]">
+        <div class="bg-gradient-to-b from-emerald-500 to-teal-600 text-slate-950 w-full max-w-md p-6 rounded-3xl text-center shadow-2xl border-2 border-emerald-400">
+            <span class="text-xs font-black tracking-widest block opacity-85 uppercase"><i class="fa-solid fa-circle-check animate-pulse mr-1"></i> LOG JAMAAH DICATAT</span>
+            <span class="font-black text-2xl block mt-1 tracking-wide uppercase border-b border-slate-950/20 pb-3" id="txt-nama-sukses">Nama Santri</span>
+            
+            <div class="mt-4 bg-slate-950/20 rounded-2xl p-4 flex flex-col gap-3 text-center">
+                <div class="flex flex-col gap-1 border-b border-white/10 pb-2">
+                    <span class="text-[9px] font-black tracking-widest text-slate-900 opacity-75 uppercase">SALDO KEMARIN</span>
+                    <span id="pop-saldo-kemarin" class="text-lg font-black text-slate-950">Rp 0</span>
+                </div>
+
+                <div class="flex flex-col gap-1 border-b border-white/10 pb-2">
+                    <span class="text-[9px] font-black tracking-widest text-slate-900 opacity-75 uppercase">REWARD HARI INI (+)</span>
+                    <span id="pop-saldo-hari-ini" class="text-lg font-black text-white">Rp 0</span>
+                </div>
+
+                <div class="flex flex-col gap-1 pt-1">
+                    <span class="text-[10px] font-black tracking-widest text-slate-900 opacity-90 uppercase">TOTAL AKUMULASI TABUNGAN</span>
+                    <span id="pop-total-saldo" class="text-3xl font-black text-white tracking-wide">Rp 0</span>
+                </div>
+
+                <p id="pop-pesan-motivasi" class="text-xs font-bold text-slate-900 mt-2 bg-white/40 px-3 py-2.5 rounded-xl italic leading-relaxed"></p>
+            </div>
+            <button onclick="tutupPopup()" class="mt-5 w-full bg-slate-950 text-white font-black py-4 rounded-2xl text-xs uppercase tracking-widest shadow-lg active:scale-95 transition-transform">LANJUTKAN SCAN</button>
+        </div>
+    </div>
+
+    <!-- POP-UP WARNING -->
+    <div id="pop-warning" class="fixed inset-0 bg-slate-950/80 backdrop-blur-md flex items-center justify-center p-6 hidden z-[110]">
+        <div class="bg-amber-500 text-slate-950 w-full max-w-sm p-6 rounded-3xl text-center shadow-2xl border-2 border-amber-400">
+            <span class="text-xs font-black tracking-widest block opacity-75"><i class="fa-solid fa-triangle-exclamation mr-1"></i> AKSES DITOLAK</span>
+            <span class="font-black text-base block mt-1 tracking-wide" id="txt-nama-peringatan">NAMA SANTRI</span>
+            <span class="text-[11px] font-bold block mt-1 bg-slate-950/20 py-1 rounded-lg uppercase tracking-wider">Sudah Absen Pada Kegiatan Ini!</span>
+        </div>
+    </div>
+
+    <script>
+        const URL_AKURAT = "https://script.google.com/macros/s/AKfycbxJ8zjyd5YLsPhpq52ntO95-Bn5gNJlKLHSozMZ1kWFJAOGir5co21ln3gpiVI9UCx2/exec";
+
+        let video = document.getElementById('video-selfie');
+        let label = document.getElementById('instruksi');
+        let kotakScan = document.getElementById('kotak-scan');
+        let dbStatus = document.getElementById('txt-db-status');
+        let canvasCap = document.getElementById('canvas-capture');
+        let iframeTabungan = document.getElementById('iframe-tabungan');
+        let loadingOverlay = document.getElementById('loading-overlay');
+
+        let isProcessing = false;
+        let databaseSantri = [];
+        let modelLoaded = false;
+
+        // SISTEM CACHE DATA UTK KECEPATAN INSTAN KEDUA & SETERUSNYA
+        async function ambilDatabaseSantri(forceRefresh = false) {
             try {
-              var folder = DriveApp.getFolderById(ID_FOLDER_FOTO_DRIVE);
-              var bagianFoto = fotoBase64.split("base64,");
-              var tipeKonten = bagianFoto[0].split(":")[1].split(";")[0];
-              var dataMurniDecoded = Utilities.base64Decode(bagianFoto[1]);
-              
-              var timestampNama = new Date().getTime();
-              var namaFileBaru = "Absen_" + nik + "_" + tanggalHariIni + "_" + timestampNama + ".jpg";
-              var blobFileGambar = Utilities.newBlob(dataMurniDecoded, tipeKonten, namaFileBaru);
-              
-              var fileHasilSimpan = folder.createFile(blobFileGambar);
-              fileHasilSimpan.setSharing(DriveApp.Access.ANYONE_WITH_LINK, DriveApp.Permission.VIEW);
-              isiKolomFoto = fileHasilSimpan.getUrl();
-            } catch(errDrive) {
-              isiKolomFoto = "Error simpan Drive: " + errDrive.toString();
+                const localData = localStorage.getItem('cache_db_santri');
+                if (localData && !forceRefresh) {
+                    databaseSantri = JSON.parse(localData);
+                    dbStatus.innerText = `🟢 Kiosk Ready (${databaseSantri.length} Santri - Local)`;
+                    dbStatus.classList.remove('animate-pulse');
+                    jalankanSyncBackground();
+                    return;
+                }
+
+                dbStatus.innerText = "🔄 Sync AI Face Cloud...";
+                const res = await fetch(`${URL_AKURAT}?aksi=ambil_database${forceRefresh ? '&force=true' : ''}`, { method: "GET" });
+                const json = await res.json();
+                if (json.status === "success") {
+                    databaseSantri = json.data;
+                    localStorage.setItem('cache_db_santri', JSON.stringify(databaseSantri));
+                    dbStatus.innerText = `🟢 Kiosk Ready (${databaseSantri.length} Santri)`;
+                    dbStatus.classList.remove('animate-pulse');
+                }
+            } catch (error) { 
+                dbStatus.innerText = `⚠️ Cloud Error`; 
             }
-          } else {
-            isiKolomFoto = fotoBase64; 
-          }
-          sheetFoto.appendRow([new Date(), nik, tanggalHariIni, kegiatan, isiKolomFoto]);
         }
-      }
 
-      SpreadsheetApp.flush();
-
-      // OPTIMASI KALKULASI CEPAT: MAP LOOKUP KILAT MENGGUNAKAN SERVER-SIDE CACHE JIKA TERSEDIA
-      var nominalHariIni = 0;
-      var poinTerbaru = 1; 
-      var saldoKemarin = 0;
-
-      var cache = CacheService.getScriptCache();
-      var cachedDb = cache.get("db_santri_lengkap");
-      var dbList = cachedDb ? JSON.parse(cachedDb) : null;
-      var santriData = null;
-
-      if (dbList) {
-        for (var d = 0; d < dbList.length; d++) {
-          if (dbList[d].nik === nik) {
-            santriData = dbList[d];
-            break;
-          }
+        async function jalankanSyncBackground() {
+            try {
+                const res = await fetch(`${URL_AKURAT}?aksi=ambil_database`, { method: "GET" });
+                const json = await res.json();
+                if (json.status === "success") {
+                    databaseSantri = json.data;
+                    localStorage.setItem('cache_db_santri', JSON.stringify(databaseSantri));
+                }
+            } catch (e) {}
         }
-      }
 
-      if (santriData) {
-        nominalHariIni = santriData.nominalHariIni;
-        poinTerbaru = (parseInt(santriData.poin) || 1) + 1; // Memperkirakan kenaikan poin langsung
-        saldoKemarin = santriData.saldoKemarin;
+        function bunyikanBeep(frekuensi, durasi) {
+            try {
+                const audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+                const oscillator = audioCtx.createOscillator();
+                const gainNode = audioCtx.createGain();
+                oscillator.connect(gainNode); gainNode.connect(audioCtx.destination);
+                oscillator.type = 'sine'; oscillator.frequency.value = frekuensi;
+                gainNode.gain.setValueAtTime(0.3, audioCtx.currentTime);
+                oscillator.start(); gainNode.gain.exponentialRampToValueAtTime(0.00001, audioCtx.currentTime + durasi);
+                oscillator.stop(audioCtx.currentTime + durasi);
+            } catch (e) {}
+        }
 
-        // Perbarui data cache secara silent
-        santriData.poin = poinTerbaru;
-        try {
-          cache.put("db_santri_lengkap", JSON.stringify(dbList), 600);
-        } catch(e) {}
-      } else {
-        // Fallback pencarian manual jika data cache kosong
-        var sheetTabungan = ss.getSheetByName(SHEET_TABUNGAN);
-        if (sheetTabungan) {
-          var dataTabungan = sheetTabungan.getDataRange().getValues();
-          var mapTabungan = {};
-          for(var t = 1; t < dataTabungan.length; t++) {
-            if(dataTabungan[t][0]) {
-              mapTabungan[dataTabungan[t][0].toString().trim()] = {
-                nominal: dataTabungan[t][2], // Kolom C
-                poin: dataTabungan[t][10]    // Kolom K
-              };
+        window.addEventListener('DOMContentLoaded', async () => {
+            if (!localStorage.getItem('session_nama')) { localStorage.setItem('session_nama', 'KIOSK_MANDIRI'); }
+            try {
+                label.innerText = "MEMUAT AI KIOSK...";
+                
+                await Promise.all([
+                    faceapi.nets.tinyFaceDetector.loadFromUri('https://unpkg.com/@vladmandic/face-api/model'),
+                    faceapi.nets.faceLandmark68Net.loadFromUri('https://unpkg.com/@vladmandic/face-api/model'),
+                    faceapi.nets.faceRecognitionNet.loadFromUri('https://unpkg.com/@vladmandic/face-api/model')
+                ]);
+                
+                modelLoaded = true;
+                await ambilDatabaseSantri();
+                
+                const stream = await navigator.mediaDevices.getUserMedia({ 
+                    video: { facingMode: "user", width: { ideal: 480 }, height: { ideal: 480 }, frameRate: { max: 30 } }, 
+                    audio: false 
+                });
+                video.srcObject = stream;
+                label.innerText = "HADAPKAN WAJAH KE KAMERA";
+                
+                async function deteksiLoop() {
+                    if (!isProcessing && !video.paused && !video.ended && databaseSantri.length > 0 && modelLoaded) {
+                        const opsiDetektor = new faceapi.TinyFaceDetectorOptions({ inputSize: 128, scoreThreshold: 0.35 });
+                        const hasilKamera = await faceapi.detectSingleFace(video, opsiDetektor).withFaceLandmarks().withFaceDescriptor();
+                        
+                        if (hasilKamera) {
+                            await verifikasiWajahLokal(hasilKamera.descriptor);
+                        }
+                    }
+                    requestAnimationFrame(deteksiLoop);
+                }
+                
+                video.addEventListener('play', () => {
+                    requestAnimationFrame(deteksiLoop);
+                });
+
+            } catch (e) { 
+                label.innerText = "AI OFFLINE / CAMERA ERROR"; 
             }
-          }
-          if(mapTabungan[nik]) {
-            nominalHariIni = mapTabungan[nik].nominal;
-            poinTerbaru = parseInt(mapTabungan[nik].poin) || 1;
-          }
-        }
+        });
 
-        try {
-          var ss2 = SpreadsheetApp.openById("1VVLIcWdovKtozlWVzQyyrPfoZljnj7MASl3QGAXILxY");
-          var sheetSaldo = ss2.getSheetByName("Daftar_Santri_Saldo");
-          if (sheetSaldo) {
-            var dataSaldo = sheetSaldo.getDataRange().getValues();
-            var mapSaldo = {};
-            for(var s = 1; s < dataSaldo.length; s++) {
-              if(dataSaldo[s][0]) {
-                mapSaldo[dataSaldo[s][0].toString().trim()] = dataSaldo[s][3]; // Kolom D
-              }
+        window.addEventListener("message", (event) => {
+            if (event.data.aksi === "kirim_saldo_ke_pop") {
+                const d = event.data;
+                loadingOverlay.classList.add('hidden'); // Memastikan loading overlay langsung tersembunyi
+
+                document.getElementById('pop-saldo-kemarin').innerText = "Rp " + Math.round(d.saldoKemarin).toLocaleString('id-ID');
+                document.getElementById('pop-saldo-hari-ini').innerText = "Rp " + Math.round(d.saldoHariIni).toLocaleString('id-ID');
+                document.getElementById('pop-total-saldo').innerText = "Rp " + Math.round(d.totalSaldo).toLocaleString('id-ID');
+
+                let pesan = "";
+                if (d.poinHarian <= 1) {
+                    pesan = `👋 Halo ${d.nama}, ini baru kegiatan ke-${d.poinHarian} kamu hari ini. Ayo kejar kegiatan berikutnya! ✨`;
+                } else if (d.poinHarian >= 2 && d.poinHarian <= 4) {
+                    pesan = `⚠️ Perhatian ${d.nama}! Kamu baru ikut ${d.poinHarian} kegiatan hari ini. Ayo lebih semangat lagi! 💪`;
+                } else if (d.poinHarian >= 5 && d.poinHarian <= 14) {
+                    pesan = `⚡ Keren ${d.nama}! Sudah ${d.poinHarian} kegiatan kamu ikuti hari ini. Pertahankan ritme ini! 🚀`;
+                } else {
+                    pesan = `🏆 Fantastis ${d.nama}! Hari ini kamu sangat produktif dengan mengikuti ${d.poinHarian} kegiatan! 🔥`;
+                }
+                
+                document.getElementById('pop-pesan-motivasi').innerText = pesan;
+                document.getElementById('pop-success').classList.remove('hidden');
             }
-            if(mapSaldo[nik] !== undefined) {
-              saldoKemarin = mapSaldo[nik];
+        });
+
+        function tutupPopup() {
+            document.getElementById('pop-success').classList.add('hidden');
+            isProcessing = false;
+            label.innerText = "HADAPKAN WAJAH KE KAMERA";
+            kotakScan.className = "w-64 h-64 border-4 border-dashed border-cyan-500/40 rounded-3xl flex items-center justify-center";
+        }
+
+        async function verifikasiWajahLokal(descriptorKamera) {
+            let santriDitemukan = null; 
+            let jarakTerkecil = 0.40; 
+
+            for (let santri of databaseSantri) {
+                try {
+                    if (!santri.vektor) continue;
+                    let arrayVektorDb = Object.values(JSON.parse(santri.vektor));
+                    let jarak = faceapi.euclideanDistance(descriptorKamera, arrayVektorDb);
+                    
+                    if (jarak < jarakTerkecil) { 
+                        jarakTerkecil = jarak; 
+                        santriDitemukan = santri; 
+                    }
+                } catch(e){}
             }
-          }
-        } catch(err) {
-          saldoKemarin = 0;
+
+            if (santriDitemukan) {
+                isProcessing = true;
+                const kegiatan = document.getElementById('pilihan-kegiatan').value;
+                const hariIni = new Date().toISOString().split('T')[0];
+                const storageKey = `absen_${hariIni}_${santriDitemukan.nik}_${kegiatan}`;
+
+                if (localStorage.getItem(storageKey) === "TERCATAT") {
+                    document.getElementById('txt-nama-peringatan').innerText = santriDitemukan.nama.toUpperCase();
+                    document.getElementById('pop-warning').classList.remove('hidden');
+                    bunyikanBeep(440, 0.1);
+                    setTimeout(() => { document.getElementById('pop-warning').classList.add('hidden'); isProcessing = false; }, 2000);
+                    return;
+                }
+
+                // AKSI INSTAN 0.1 DETIK DIMULAI DI SINI (OPTIMISTIC UI UPDATE)
+                bunyikanBeep(1000, 0.25);
+                document.getElementById('txt-nama-sukses').innerText = santriDitemukan.nama.toUpperCase();
+                kotakScan.className = "w-64 h-64 border-4 border-solid border-emerald-400 rounded-3xl bg-emerald-500/10 scale-105";
+
+                // Membaca data tabungan langsung dari cache memory untuk kalkulasi instan tanpa jeda
+                const localNominalHariIni = santriDitemukan.nominalHariIni !== undefined ? santriDitemukan.nominalHariIni : 0;
+                const localSaldoKemarin = santriDitemukan.saldoKemarin !== undefined ? santriDitemukan.saldoKemarin : 0;
+                const localPoin = (parseInt(santriDitemukan.poin) || 1) + 1;
+
+                // Mengirim perintah kalkulasi instan ke iframe (proses 0ms)
+                iframeTabungan.contentWindow.postMessage({
+                    aksi: "minta_data_saldo",
+                    nik: santriDitemukan.nik,
+                    nama: santriDitemukan.nama,
+                    realtimeSaldo: localNominalHariIni, 
+                    realtimeSaldoKemarin: localSaldoKemarin, 
+                    realtimePoin: localPoin
+                }, "*");
+
+                // Tandai lokal segera untuk mencegah duplikasi pemindaian
+                localStorage.setItem(storageKey, "TERCATAT");
+
+                // Perbarui poin di memori lokal agar siap untuk pindaian berikutnya
+                santriDitemukan.poin = localPoin;
+                localStorage.setItem('cache_db_santri', JSON.stringify(databaseSantri));
+
+                // Proses pemotretan gambar & pengunggahan ke server dilakukan di latar belakang (async background fetch)
+                canvasCap.width = video.videoWidth; canvasCap.height = video.videoHeight;
+                const ctx = canvasCap.getContext('2d');
+                ctx.translate(canvasCap.width, 0); ctx.scale(-1, 1);
+                ctx.drawImage(video, 0, 0, canvasCap.width, canvasCap.height);
+                const dataFotoBase64 = canvasCap.toDataURL('image/jpeg', 0.25);
+
+                try {
+                    fetch(URL_AKURAT, { 
+                        method: "POST", 
+                        headers: { "Content-Type": "text/plain;charset=utf-8" }, 
+                        body: JSON.stringify({
+                            aksi: "absen_santri",
+                            nik: santriDitemukan.nik,
+                            kegiatan: kegiatan,
+                            petugas: localStorage.getItem('session_nama'),
+                            foto: dataFotoBase64
+                        }) 
+                    })
+                    .then(response => response.json())
+                    .then(hasilJson => {
+                        if (hasilJson.realtime) {
+                            // Perbarui memori cache dengan data matematika kalkulasi final dari spreadsheet secara silent
+                            santriDitemukan.nominalHariIni = hasilJson.realtime.nominalHariIni;
+                            santriDitemukan.saldoKemarin = hasilJson.realtime.saldoKemarin;
+                            santriDitemukan.poin = hasilJson.realtime.poin;
+                            localStorage.setItem('cache_db_santri', JSON.stringify(databaseSantri));
+
+                            // Jika pop-up sukses masih terbuka, data di layar akan disinkronkan secara halus
+                            const d = {
+                                saldoKemarin: hasilJson.realtime.saldoKemarin,
+                                saldoHariIni: hasilJson.realtime.nominalHariIni,
+                                totalSaldo: hasilJson.realtime.saldoKemarin + hasilJson.realtime.nominalHariIni,
+                                nama: santriDitemukan.nama,
+                                nik: santriDitemukan.nik,
+                                poinHarian: hasilJson.realtime.poin
+                            };
+                            
+                            document.getElementById('pop-saldo-kemarin').innerText = "Rp " + Math.round(d.saldoKemarin).toLocaleString('id-ID');
+                            document.getElementById('pop-saldo-hari-ini').innerText = "Rp " + Math.round(d.saldoHariIni).toLocaleString('id-ID');
+                            document.getElementById('pop-total-saldo').innerText = "Rp " + Math.round(d.totalSaldo).toLocaleString('id-ID');
+                        }
+                    })
+                    .catch(e => {
+                        console.log("Background sync error ignored", e);
+                    });
+                } catch (e) {
+                    console.log("Background post process ignored", e);
+                }
+            }
         }
-      }
-      
-      return buatOutputJSON({ 
-        status: "success", 
-        realtime: {
-          nominalHariIni: nominalHariIni,
-          saldoKemarin: saldoKemarin,
-          poin: poinTerbaru
-        }
-      });
-    }
- 
-    else if (aksi === "absen_guru_click") {
-      return tanganiPostCode2(aksi, parameter, ss);
-    }
- 
-    return buatOutputJSON({ status: "error", message: "Aksi POST tidak dikenali." });
-  } catch(error) {
-    return buatOutputJSON({ status: "error", message: "Crash Server: " + error.toString() });
-  }
-}
-
-// =========================================================================
-// INTEGRASI EVALUASI & ADM OPRAK
-// =========================================================================
-const SHEET_DISPENSASI   = "master_dispensasi"; 
-const SHEET_JADWAL_OPRAK = "jadwal_oprak";
-const SHEET_JADWAL_GURU  = "jadwal_gurupdf";  
-const SHEET_ABSEN_GURU   = "absensi_sekolah";  
-
-function tanganiGetCode2(aksi, parameter, ss) {
-  if (aksi === "ambil_rekap_takziran_harian") {
-    var sheet = ss.getSheetByName("evaluasi_akademik"); 
-    if (!sheet) return buatOutputJSON({ status: "error", message: "Sheet 'evaluasi_akademik' tidak ditemukan!" });
-    var data = sheet.getDataRange().getValues();
-    var hasil = [];
-    for (var i = 1; i < data.length; i++) {
-      var item = {}; 
-      item["nik"] = data[i][0];                      
-      item["nama"] = data[i][1];                     
-      item["gender"] = data[i][2];                   
-      item["Kelas/Golongan"] = data[i][3];           
-      item["Poin Harian"] = data[i][4];              
-      item["Poin Mingguan + Status"] = data[i][5];   
-      item["Isi Takziran (Harian)"] = data[i][6];    
-      item["Status (Harian)"] = data[i][7];          
-      hasil.push(item);
-    }
-    return buatOutputJSON(hasil);
-  }
-
-  else if (aksi === "ambil_rekap_guru_realtime") {
-    var shAbsenGuru = ss.getSheetByName(SHEET_ABSEN_GURU); 
-    var logHadirGuru = [];
-    if (shAbsenGuru) {
-      var dataAbsenGuru = shAbsenGuru.getDataRange().getValues();
-      var hariIniString = Utilities.formatDate(new Date(), Session.getScriptTimeZone(), "yyyy-MM-dd");
-      for (var g = 1; g < dataAbsenGuru.length; g++) {
-        if (!dataAbsenGuru[g][0]) continue;
-        var tglAbsenGuru = "";
-        try {
-          tglAbsenGuru = Utilities.formatDate(new Date(dataAbsenGuru[g][0]), Session.getScriptTimeZone(), "yyyy-MM-dd");
-        } catch(err) { continue; }
-        if (tglAbsenGuru === hariIniString) {
-          var namaClean = dataAbsenGuru[g][2] ? dataAbsenGuru[g][2].toString().trim().toUpperCase() : "";
-          var jamLog    = dataAbsenGuru[g][1] ? dataAbsenGuru[g][1].toString().trim() : "";
-          var jamJadwal = dataAbsenGuru[g][3] ? dataAbsenGuru[g][3].toString().trim() : "BEBAS";
-          var mapel     = dataAbsenGuru[g][4] ? dataAbsenGuru[g][4].toString().trim() : "-";
-          var jamMenit = jamLog.split(':').slice(0,2).join(':');
-          if (!jamMenit) jamMenit = "Hari Ini";
-          logHadirGuru.push({ nama: namaClean, jam: jamMenit, shalat: jamJadwal, petugas: mapel });
-        }
-      }
-    }
-    return buatOutputJSON({ status: "success", liveFeedGuru: logHadirGuru });
-  }
-
-  else if (aksi === "ambil_rekap_dashboard") {
-    var sheetMaster = ss.getSheetByName(SHEET_SANTRI).getDataRange().getValues();
-    var sheetJamaah = ss.getSheetByName(SHEET_JAMAAH).getDataRange().getValues();
-    var totalSantri = 0; var sudahDaftar = 0; var belumDaftar = 0;
-    var sudahDaftarList = []; var belumDaftarList = [];
-    var timezone = ss.getSpreadsheetTimeZone(); 
-    var hariIniString = Utilities.formatDate(new Date(), timezone, "yyyy-MM-dd");
-
-    function bersihkanNik(nik) {
-      if (nik === null || nik === undefined) return "";
-      var str = nik.toString().trim();
-      if (str.toLowerCase().indexOf("e") !== -1) {
-        try { str = Number(str).toFixed(0); } catch(err) {}
-      }
-      return str.replace(/\D/g, ""); 
-    }
-
-    for (var i = 1; i < sheetMaster.length; i++) {
-      if (!sheetMaster[i][0] || sheetMaster[i][0].toString().trim() === "") continue;
-      var kompleks = sheetMaster[i][3] ? sheetMaster[i][3].toString().trim().toUpperCase() : "";
-      if (kompleks !== "PPMUY PUSAT") continue;
-      totalSantri++; 
-      var n = sheetMaster[i][1].toString().trim(); 
-      var k = sheetMaster[i][7] ? sheetMaster[i][7].toString().trim() : "-"; 
-      var statusWajahRaw = sheetMaster[i][8] ? sheetMaster[i][8].toString().trim().toUpperCase() : "BELUM";
-      if (statusWajahRaw === "SUDAH" || statusWajahRaw === "AKTIF") {
-        sudahDaftar++; sudahDaftarList.push({ nama: n, kelas: k, status: "SUDAH" });
-      } else {
-        belumDaftar++; belumDaftarList.push({ nama: n, kelas: k, status: "BELUM" });
-      }
-    }
-
-    var logHadirSiklus = {}; var logHariIniLive = [];
-    var statShalat = { 
-      Subuh: 0, Dzuhur: 0, Ashar: 0, Maghrib: 0, Isya: 0,
-      Quranan: 0, Afsahan: 0, Belajar: 0, Ndalem: 0, Sorogan: 0,
-      "PDF 1": 0, "PDF 2": 0, "PDF 3": 0
-    };
-
-    var mapSantriPusat = {};
-    for (var i = 1; i < sheetMaster.length; i++) {
-      if (!sheetMaster[i][0]) continue;
-      var kompleksCheck = sheetMaster[i][3] ? sheetMaster[i][3].toString().trim().toUpperCase() : "";
-      if (complexCheck === "PPMUY PUSAT") {
-        var nikClean = bersihkanNik(sheetMaster[i][0]);
-        mapSantriPusat[nikClean] = sheetMaster[i][1].toString().trim();
-      }
-    }
-
-    for (var j = sheetJamaah.length - 1; j >= 1; j--) {
-      if (!sheetJamaah[j][0]) continue;
-      var cellTgl = sheetJamaah[j][0];
-      var tglLogString = "";
-      try {
-        if (cellTgl instanceof Date) { tglLogString = Utilities.formatDate(cellTgl, timezone, "yyyy-MM-dd"); } 
-        else { tglLogString = Utilities.formatDate(new Date(cellTgl), timezone, "yyyy-MM-dd"); }
-      } catch(e) { continue; }
-      
-      if (tglLogString === hariIniString) {
-        var nikLog = bersihkanNik(sheetJamaah[j][1]);
-        if (!mapSantriPusat.hasOwnProperty(nikLog)) continue;
-        var namaReal = mapSantriPusat[nikLog];
-        var waktuShalat = sheetJamaah[j][2].toString().trim(); 
-        var jamMenit = "00:00";
-        try {
-          if (cellTgl instanceof Date) { jamMenit = Utilities.formatDate(cellTgl, timezone, "HH:mm"); } 
-          else { jamMenit = Utilities.formatDate(new Date(cellTgl), timezone, "HH:mm"); }
-        } catch(err) {}
-        if (!logHadirSiklus[nikLog]) logHadirSiklus[nikLog] = [];
-        logHadirSiklus[nikLog].push(waktuShalat);
-        if (statShalat.hasOwnProperty(waktuShalat)) { statShalat[waktuShalat]++; }
-        if (logHariIniLive.length < 15) {
-          logHariIniLive.push({
-            jam: jamMenit, waktu: jamMenit, nama: namaReal, shalat: waktuShalat, kegiatan: waktuShalat,
-            petugas: sheetJamaah[j][4] ? sheetJamaah[j][4].toString().trim() : "Kiosk Mandiri"
-          });
-        }
-      }
-    }
-
-    var rekapAlpaKegiatan = { 
-      Subuh: [], Dzuhur: [], Ashar: [], Maghrib: [], Isya: [],
-      Quranan: [], Afsahan: [], Belajar: [], Ndalem: [], Sorogan: [],
-      "PDF 1": [], "PDF 2": [], "PDF 3": []
-    };
-    
-    for (var s = 1; s < sheetMaster.length; s++) {
-      if (!sheetMaster[s][0] || sheetMaster[s][0].toString().trim() === "") continue;
-      var kompleksCheck = sheetMaster[s][3] ? sheetMaster[s][3].toString().trim().toUpperCase() : "";
-      var statusSantri = sheetMaster[s][4] ? sheetMaster[s][4].toString().trim().toLowerCase() : "";
-      if (kompleksCheck === "PPMUY PUSAT" && statusSantri === "aktif") {
-        var nikKey = bersihkanNik(sheetMaster[s][0]);
-        var listHadir = logHadirSiklus[nikKey] || [];
-        var infoS = { nama: sheetMaster[s][1].toString().trim(), kelas: (sheetMaster[s][7] || "-").toString().trim() };
-        if (!listHadir.includes("Subuh")) rekapAlpaKegiatan.Subuh.push(infoS);
-        if (!listHadir.includes("Dzuhur")) rekapAlpaKegiatan.Dzuhur.push(infoS);
-        if (!listHadir.includes("Ashar")) rekapAlpaKegiatan.Ashar.push(infoS);
-        if (!listHadir.includes("Maghrib")) rekapAlpaKegiatan.Maghrib.push(infoS);
-        if (!listHadir.includes("Isya")) rekapAlpaKegiatan.Isya.push(infoS);
-        if (!listHadir.includes("Quranan")) rekapAlpaKegiatan.Quranan.push(infoS);
-        if (!listHadir.includes("Afsahan")) rekapAlpaKegiatan.Afsahan.push(infoS);
-        if (!listHadir.includes("Belajar")) rekapAlpaKegiatan.Belajar.push(infoS);
-        if (!listHadir.includes("Ndalem")) rekapAlpaKegiatan.Ndalem.push(infoS);
-        if (!listHadir.includes("Sorogan")) rekapAlpaKegiatan.Sorogan.push(infoS);
-        if (!listHadir.includes("PDF 1")) rekapAlpaKegiatan["PDF 1"].push(infoS);
-        if (!listHadir.includes("PDF 2")) rekapAlpaKegiatan["PDF 2"].push(infoS);
-        if (!listHadir.includes("PDF 3")) rekapAlpaKegiatan["PDF 3"].push(infoS);
-      }
-    }
-
-    var pTarget = "";
-    var sheetPengurus = ss.getSheetByName(SHEET_PENGURUS);
-    if (sheetPengurus) {
-      var dataPengurus = sheetPengurus.getDataRange().getValues();
-      var reqRole = (parameter.role || "").toString().trim();
-      for (var u = 1; u < dataPengurus.length; u++) {
-        if (dataPengurus[u][3].toString().trim() === reqRole) { pTarget = dataPengurus[u][1].toString().trim(); break; }
-      }
-    }
-
-    var totalGuruHadirHariIni = 0;
-    var shAbsenGuru = ss.getSheetByName(SHEET_ABSEN_GURU);
-    if (shAbsenGuru) {
-      var dataAbsenGuru = shAbsenGuru.getDataRange().getValues();
-      var hariIniString = Utilities.formatDate(new Date(), Session.getScriptTimeZone(), "yyyy-MM-dd");
-      for (var g = 1; g < dataAbsenGuru.length; g++) {
-        if (!dataAbsenGuru[g][0]) continue;
-        var tglAbsenGuru = "";
-        try { tglAbsenGuru = Utilities.formatDate(new Date(dataAbsenGuru[g][0]), Session.getScriptTimeZone(), "yyyy-MM-dd"); } catch(e) { continue; }
-        if (tglAbsenGuru === hariIniString) {
-          var statusGuru = dataAbsenGuru[g][3] ? dataAbsenGuru[g][3].toString().trim().toUpperCase() : "";
-          if (statusGuru !== "" && statusGuru !== "GAIB") { totalGuruHadirHariIni++; }
-        }
-      }
-    }
-
-    return buatOutputJSON({
-      status: "success", password_terbaru: pTarget,
-      rekapWajah: { total: totalSantri, sudah: sudahDaftar, belum: belumDaftar, listBelum: belumDaftarList, listSudah: sudahDaftarList },
-      rekapShalat: statShalat, liveFeed: logHariIniLive, daftarAlpa: rekapAlpaKegiatan, rekapGuru: { hadir: totalGuruHadirHariIni }
-    });
-  }
-
-  else if (aksi === "get_initial_data_oprak") {
-    if(!ss.getSheetByName(SHEET_JADWAL_OPRAK)) { ss.insertSheet(SHEET_JADWAL_OPRAK).appendRow(["Tanggal", "Nama Petugas", "Status Kerja", "Poin Pelanggaran"]); }
-    return buatOutputJSON({ status: "success", message: "Fitur modul Oprak terkoneksi di code2.gs" });
-  }
-
-  else if (aksi === "ambil_guru_pdf") {
-    var hTarget = parameter.hari ? parameter.hari.toString().trim().toLowerCase() : "";
-    var gTarget = parameter.gender ? parameter.gender.toString().trim().toLowerCase() : "";
-    var shJadwal = ss.getSheetByName(SHEET_JADWAL_GURU);
-    if (!shJadwal) { return buatOutputJSON({ status: "error", message: "Sheet '" + SHEET_JADWAL_GURU + "' tidak ditemukan!" }); }
-    var dataJadwal = shJadwal.getDataRange().getValues();
-    var hasilFilter = [];
-    for (var k = 1; k < dataJadwal.length; k++) {
-      if (!dataJadwal[k][0]) continue; 
-      var barisNama   = dataJadwal[k][0].toString().trim();
-      var barisHari   = dataJadwal[k][1] ? dataJadwal[k][1].toString().trim().toLowerCase() : "";
-      var barisJam    = dataJadwal[k][2] ? dataJadwal[k][2].toString().trim() : "JAM";
-      var barisGender = dataJadwal[k][3] ? dataJadwal[k][3].toString().trim().toLowerCase() : "";
-      var barisKelas  = dataJadwal[k][4] ? dataJadwal[k][4].toString().trim() : "-";
-      var barisMapel  = dataJadwal[k][5] ? dataJadwal[k][5].toString().trim() : "-";
-      if (barisHari === hTarget && barisGender === gTarget) {
-        hasilFilter.push({ nama: barisNama, jam: barisJam, kelas: barisKelas, mapel: barisMapel });
-      }
-    }
-    return buatOutputJSON({ status: "success", data: hasilFilter });
-  }
-} 
-
-function tanganiPostCode2(aksi, parameter, ss) {
-  if (aksi === "absen_guru_click") {
-    var nama = parameter.nama; var mapel = parameter.mapel; var kelas = parameter.kelas; var gender = parameter.gender; var jamJadwal = parameter.jam || "BEBAS"; 
-    var sheetAbsen = ss.getSheetByName(SHEET_ABSEN_GURU);
-    if (!sheetAbsen) { return buatOutputJSON({ status: "error", message: "Sheet '" + SHEET_ABSEN_GURU + "' tidak ditemukan!" }); }
-    var waktuLog = Utilities.formatDate(new Date(), "GMT+7", "HH:mm:ss");
-    var tanggalLog = Utilities.formatDate(new Date(), "GMT+7", "yyyy-MM-dd");
-    sheetAbsen.appendRow([tanggalLog, waktuLog, nama, jamJadwal, mapel, kelas, "SEKOLAH (" + gender + ")"]);
-    return buatOutputJSON({ status: "success", message: "Absensi guru berhasil dicatat sebagai " + jamJadwal });
-  }
-  return buatOutputJSON({ status: "error", message: "Aksi POST tidak dikenal di code2.gs" });
-}
-
-function hapusFotoLamaOtomatis() {
-  try {
-    var folder = DriveApp.getFolderById(ID_FOLDER_FOTO_DRIVE);
-    var files = folder.getFiles();
-    var batasHariLama = 7; 
-    
-    var waktuSekarang = new Date().getTime();
-    var milidetikPerHari = 24 * 60 * 60 * 1000;
-    
-    while (files.hasNext()) {
-      var file = files.next();
-      var waktuDibuat = file.getDateCreated().getTime();
-      var selisihHari = (waktuSekarang - waktuDibuat) / milidetikPerHari;
-      
-      if (selisihHari > batasHariLama) {
-        file.setTrashed(true); 
-      }
-    }
-    Logger.log("Pembersihan berkala foto lama berhasil dilakukan.");
-  } catch(e) {
-    Logger.log("Gagal melakukan pembersihan: " + e.toString());
-  }
-}
-
-function paksaIzinDriveOtomatis() {
-  Logger.log("Mencoba akses Drive: " + DriveApp.getRootFolder().getName());
-  var namaFolderBencana = "Foto Absen Santri Otomatis";
-  var folders = DriveApp.getFoldersByName(namaFolderBencana);
-  if (!folders.hasNext()) {
-    var folderBaru = DriveApp.createFolder(namaFolderBencana);
-    Logger.log("Folder otomatis berhasil dibuat dengan ID: " + folderBaru.getId());
-  } else {
-    Logger.log("Folder otomatis sudah ada.");
-  }
-}
+    </script>
+</body>
+</html>"
