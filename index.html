@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>Terminal Kiosk Wajah AI - Fixed Calculation</title>
+    <title>Terminal Kiosk Wajah AI</title>
     <script src="https://cdn.jsdelivr.net/npm/@tailwindcss/browser@4"></script>
     <script defer src="https://cdn.jsdelivr.net/npm/face-api.js@0.22.2/dist/face-api.min.js"></script>
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
@@ -14,7 +14,7 @@
 </head>
 <body class="bg-slate-950 text-slate-100 min-h-screen flex flex-col justify-between p-4">
 
-    <!-- SPINNER OVERLAY (Dibuat lebih keren & cepat) -->
+    <!-- SPINNER OVERLAY -->
     <div id="loading-overlay" class="fixed inset-0 bg-slate-950/90 backdrop-blur-md flex flex-col items-center justify-center z-[100] hidden">
         <div class="w-20 h-20 border-4 border-slate-800 border-t-cyan-500 rounded-full animate-spin shadow-[0_0_20px_rgba(6,182,212,0.5)]"></div>
         <p class="mt-6 text-cyan-400 font-black text-sm tracking-[0.2em] uppercase animate-pulse">MENGKALKULASI TABUNGAN...</p>
@@ -69,34 +69,38 @@
         </a>
     </div>
 
-    <!-- POP-UP HASIL -->
+    <!-- POP-UP UTAMA HASIL -->
     <div id="pop-success" class="fixed inset-0 bg-slate-950/95 backdrop-blur-xl flex items-center justify-center p-6 hidden z-[110]">
         <div class="bg-gradient-to-b from-emerald-500 to-teal-600 text-slate-950 w-full max-w-md p-6 rounded-3xl text-center shadow-2xl border-2 border-emerald-400">
             <span class="text-xs font-black tracking-widest block opacity-85 uppercase"><i class="fa-solid fa-circle-check animate-pulse mr-1"></i> LOG JAMAAH DICATAT</span>
-            <span class="font-black text-2xl block mt-1 tracking-wide uppercase border-b border-slate-950/20 pb-3" id="txt-nama-sukses">NAMA SANTRI</span>
+            <span class="font-black text-2xl block mt-1 tracking-wide uppercase border-b border-slate-950/20 pb-3" id="txt-nama-sukses">Nama Santri</span>
             
             <div class="mt-4 bg-slate-950/20 rounded-2xl p-4 flex flex-col gap-3 text-center">
                 <div class="flex flex-col gap-1 border-b border-white/10 pb-2">
                     <span class="text-[9px] font-black tracking-widest text-slate-900 opacity-75 uppercase">SALDO KEMARIN</span>
                     <span id="pop-saldo-kemarin" class="text-lg font-black text-slate-950">Rp 0</span>
                 </div>
+
                 <div class="flex flex-col gap-1 border-b border-white/10 pb-2">
                     <span class="text-[9px] font-black tracking-widest text-slate-900 opacity-75 uppercase">REWARD HARI INI (+)</span>
                     <span id="pop-saldo-hari-ini" class="text-lg font-black text-white">Rp 0</span>
                 </div>
+
                 <div class="flex flex-col gap-1 pt-1">
                     <span class="text-[10px] font-black tracking-widest text-slate-900 opacity-90 uppercase">TOTAL AKUMULASI TABUNGAN</span>
                     <span id="pop-total-saldo" class="text-3xl font-black text-white tracking-wide">Rp 0</span>
                 </div>
+
                 <p id="pop-pesan-motivasi" class="text-xs font-bold text-slate-900 mt-2 bg-white/40 px-3 py-2.5 rounded-xl italic leading-relaxed"></p>
             </div>
             <button onclick="tutupPopup()" class="mt-5 w-full bg-slate-950 text-white font-black py-4 rounded-2xl text-xs uppercase tracking-widest shadow-lg active:scale-95 transition-transform">LANJUTKAN SCAN</button>
         </div>
     </div>
 
+    <!-- POP-UP WARNING -->
     <div id="pop-warning" class="fixed inset-0 bg-slate-950/80 backdrop-blur-md flex items-center justify-center p-6 hidden z-[110]">
         <div class="bg-amber-500 text-slate-950 w-full max-w-sm p-6 rounded-3xl text-center shadow-2xl border-2 border-amber-400">
-            <span class="text-xs font-black tracking-widest block opacity-75 uppercase"><i class="fa-solid fa-triangle-exclamation mr-1"></i> AKSES DITOLAK</span>
+            <span class="text-xs font-black tracking-widest block opacity-75"><i class="fa-solid fa-triangle-exclamation mr-1"></i> AKSES DITOLAK</span>
             <span class="font-black text-base block mt-1 tracking-wide" id="txt-nama-peringatan">NAMA SANTRI</span>
             <span class="text-[11px] font-bold block mt-1 bg-slate-950/20 py-1 rounded-lg uppercase tracking-wider">Sudah Absen Pada Kegiatan Ini!</span>
         </div>
@@ -153,6 +157,7 @@
                 const stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: "user" }, audio: false });
                 video.srcObject = stream;
                 label.innerText = "HADAPKAN WAJAH KE KAMERA";
+                
                 setInterval(async () => {
                     if (isProcessing || video.paused || video.ended || databaseSantri.length === 0) return;
                     const hasilKamera = await faceapi.detectSingleFace(video, new faceapi.TinyFaceDetectorOptions({ inputSize: 416, scoreThreshold: 0.5 })).withFaceLandmarks().withFaceDescriptor();
@@ -165,17 +170,23 @@
         window.addEventListener("message", (event) => {
             if (event.data.aksi === "kirim_saldo_ke_pop") {
                 const d = event.data;
-                loadingOverlay.classList.add('hidden'); // Sembunyikan spinner
+                loadingOverlay.classList.add('hidden'); // Matikan Spinner
 
                 document.getElementById('pop-saldo-kemarin').innerText = "Rp " + Math.round(d.saldoKemarin).toLocaleString('id-ID');
                 document.getElementById('pop-saldo-hari-ini').innerText = "Rp " + Math.round(d.saldoHariIni).toLocaleString('id-ID');
                 document.getElementById('pop-total-saldo').innerText = "Rp " + Math.round(d.totalSaldo).toLocaleString('id-ID');
 
                 let pesan = "";
-                if (d.poinHarian <= 1) pesan = `👋 Halo ${d.nama}, semangat kegiatan pertamamu hari ini! ✨`;
-                else if (d.poinHarian <= 4) pesan = `⚠️ Semangat ${d.nama}! Baru ${d.poinHarian} kegiatan. Ayo kejar lagi! 💪`;
-                else pesan = `🏆 Fantastis ${d.nama}! Sudah ${d.poinHarian} kegiatan. Kamu luar biasa! 🚀`;
-
+                if (d.poinHarian <= 1) {
+                    pesan = `👋 Halo ${d.nama}, ini baru kegiatan ke-${d.poinHarian} kamu hari ini. Ayo kejar kegiatan berikutnya! ✨`;
+                } else if (d.poinHarian >= 2 && d.poinHarian <= 4) {
+                    pesan = `⚠️ Perhatian ${d.nama}! Kamu baru ikut ${d.poinHarian} kegiatan hari ini. Ayo lebih semangat lagi! 💪`;
+                } else if (d.poinHarian >= 5 && d.poinHarian <= 14) {
+                    pesan = `⚡ Keren ${d.nama}! Sudah ${d.poinHarian} kegiatan kamu ikuti hari ini. Pertahankan ritme ini! 🚀`;
+                } else {
+                    pesan = `🏆 Fantastis ${d.nama}! Hari ini kamu sangat produktif dengan mengikuti ${d.poinHarian} kegiatan! 🔥`;
+                }
+                
                 document.getElementById('pop-pesan-motivasi').innerText = pesan;
                 document.getElementById('pop-success').classList.remove('hidden');
             }
@@ -212,8 +223,9 @@
                     return;
                 }
 
-                // MUNCULKAN SPINNER LANGSUNG
+                // AKTIFKAN SPINNER SEGERA
                 loadingOverlay.classList.remove('hidden');
+                
                 localStorage.setItem(storageKey, "TERCATAT");
                 document.getElementById('txt-nama-sukses').innerText = santriDitemukan.nama.toUpperCase();
                 kotakScan.className = "w-64 h-64 border-4 border-solid border-emerald-400 rounded-3xl bg-emerald-500/10 scale-105";
@@ -223,26 +235,40 @@
                 const ctx = canvasCap.getContext('2d');
                 ctx.translate(canvasCap.width, 0); ctx.scale(-1, 1);
                 ctx.drawImage(video, 0, 0, canvasCap.width, canvasCap.height);
-                const foto = canvasCap.toDataURL('image/jpeg', 0.5);
+                const dataFotoBase64 = canvasCap.toDataURL('image/jpeg', 0.3);
 
                 try {
-                    const res = await fetch(URL_AKURAT, { 
+                    const responseCloud = await fetch(URL_AKURAT, { 
                         method: "POST", 
-                        body: JSON.stringify({ aksi: "absen_santri", nik: santriDitemukan.nik, kegiatan: kegiatan, petugas: "KIOSK_AI", foto: foto }) 
+                        headers: { "Content-Type": "text/plain;charset=utf-8" }, 
+                        body: JSON.stringify({
+                            aksi: "absen_santri",
+                            nik: santriDitemukan.nik,
+                            kegiatan: kegiatan,
+                            petugas: localStorage.getItem('session_nama'),
+                            foto: dataFotoBase64
+                        }) 
                     });
-                    const resJson = await res.json();
+                    const hasilJson = await responseCloud.json();
                     
-                    if (resJson.realtime) {
-                        // Kirim data ke iframe untuk dihitung
+                    if (hasilJson.realtime) {
+                        // Teruskan data server-side lookup ke iframe kalkulator
                         iframeTabungan.contentWindow.postMessage({
                             aksi: "minta_data_saldo",
                             nik: santriDitemukan.nik,
                             nama: santriDitemukan.nama,
-                            realtimeSaldo: resJson.realtime.saldo,
-                            realtimePoin: resJson.realtime.poin
+                            realtimeSaldo: hasilJson.realtime.nominalHariIni, // nominal dari tabungan
+                            realtimeSaldoKemarin: hasilJson.realtime.saldoKemarin, // saldo dari Daftar_Santri_Saldo
+                            realtimePoin: hasilJson.realtime.poin
                         }, "*");
-                    } else { throw new Error(); }
-                } catch (e) { loadingOverlay.classList.add('hidden'); isProcessing = false; }
+                    } else {
+                        loadingOverlay.classList.add('hidden');
+                        isProcessing = false;
+                    }
+                } catch (e) {
+                    loadingOverlay.classList.add('hidden');
+                    isProcessing = false;
+                }
             }
         }
     </script>
