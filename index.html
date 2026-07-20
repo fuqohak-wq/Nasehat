@@ -3,281 +3,335 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>AI Kiosk Optimized</title>
+    <title>Terminal Kiosk Wajah AI</title>
     <script src="https://cdn.jsdelivr.net/npm/@tailwindcss/browser@4"></script>
     <script defer src="https://cdn.jsdelivr.net/npm/face-api.js@0.22.2/dist/face-api.min.js"></script>
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
     <style>
-        .video-container { transform: scaleX(-1); filter: brightness(1.1) contrast(1.1); }
-        .loading-pulse { animation: pulse 1.5s cubic-bezier(0.4, 0, 0.6, 1) infinite; }
-        @keyframes pulse { 0%, 100% { opacity: 1; } 50% { opacity: .5; } }
+        .spinner-kiosk { border-top-color: #22d3ee; animation: spin 0.8s linear infinite; }
+        @keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
+        body { touch-action: manipulation; }
     </style>
 </head>
-<body class="bg-slate-950 text-slate-100 min-h-screen flex flex-col p-4 overflow-hidden">
+<body class="bg-slate-950 text-slate-100 min-h-screen flex flex-col justify-between p-4">
 
-    <!-- HEADER / TOMBOL KEMBALI DI ATAS -->
-    <div class="w-full max-w-md mx-auto flex justify-between items-center mb-4">
-        <a href="dashboard.html" class="bg-slate-800 hover:bg-slate-700 text-white px-4 py-2 rounded-xl text-xs font-bold transition-all">
-            <i class="fa-solid fa-arrow-left mr-2"></i>KEMBALI
-        </a>
-        <div id="txt-db-status" class="text-[10px] font-mono text-cyan-400 bg-cyan-500/10 px-3 py-1 rounded-full border border-cyan-500/30">
-            Checking System...
+    <!-- SPINNER OVERLAY -->
+    <div id="loading-overlay" class="fixed inset-0 bg-slate-950/90 backdrop-blur-md flex flex-col items-center justify-center z-[100] hidden">
+        <div class="w-20 h-20 border-4 border-slate-800 border-t-cyan-500 rounded-full animate-spin shadow-[0_0_20px_rgba(6,182,212,0.5)]"></div>
+        <p class="mt-6 text-cyan-400 font-black text-sm tracking-[0.2em] uppercase animate-pulse">MENGKALKULASI TABUNGAN...</p>
+    </div>
+
+    <iframe id="iframe-tabungan" src="tabungan.html" class="hidden"></iframe>
+
+    <!-- PANEL NAVIGASI ATAS & TOMBOL KEMBALI -->
+    <div class="w-full max-w-md mx-auto flex flex-col gap-2 mb-2">
+        <div class="flex gap-2 w-full">
+            <a href="dashboard.html" class="flex-1 bg-slate-900 border border-slate-800 text-slate-400 font-black py-2.5 rounded-xl text-[11px] uppercase text-center tracking-wider shadow-md hover:bg-slate-800 transition-colors">
+                <i class="fa-solid fa-arrow-left mr-1"></i> Dashboard
+            </a>
+            <a href="orangtua.html" class="flex-1 bg-rose-950/60 border border-rose-900 text-rose-300 font-black py-2.5 rounded-xl text-[11px] uppercase text-center tracking-wider shadow-md hover:bg-rose-950 transition-colors">
+                <i class="fa-solid fa-heart mr-1"></i> Mode Orang Tua
+            </a>
         </div>
-    </div>
-
-    <!-- SELECTION AREA -->
-    <div class="w-full max-w-md mx-auto mb-4">
-        <select id="pilihan-kegiatan" class="w-full bg-slate-900 border-2 border-slate-800 rounded-2xl px-4 py-4 text-sm font-black text-white outline-none focus:border-cyan-500 transition-all">
-            <option value="Subuh">Jamaah Subuh</option>
-            <option value="Dzuhur">Jamaah Dzuhur</option>
-            <option value="Ashar">Jamaah Ashar</option>
-            <option value="Maghrib">Jamaah Maghrib</option>
-            <option value="Isya">Jamaah Isya</option>
-            <option value="Quranan">Ngaji al-Qur'an Bakdo Subuh</option>
-            <option value="PDF 1">Sekolah PDF 1</option>
-            <option value="PDF 2">Sekolah PDF 2</option>
-            <option value="PDF 3">Sekolah PDF 3</option>
-            <option value="Belajar">Jam Belajar</option>
-        </select>
-    </div>
-
-    <!-- CAMERA AREA -->
-    <div class="relative w-full max-w-md aspect-square mx-auto bg-slate-900 rounded-[3rem] border-4 border-slate-800 overflow-hidden shadow-2xl">
-        <video id="video-selfie" autoplay playsinline class="video-container w-full h-full object-cover"></video>
         
-        <!-- Overlay Scan -->
-        <div class="absolute inset-0 flex flex-col items-center justify-center">
-            <div id="scan-box" class="w-72 h-72 border-2 border-cyan-500/30 rounded-[2rem] relative transition-all duration-500">
-                <div class="absolute top-0 left-0 w-8 h-8 border-t-4 border-l-4 border-cyan-400 rounded-tl-lg"></div>
-                <div class="absolute top-0 right-0 w-8 h-8 border-t-4 border-r-4 border-cyan-400 rounded-tr-lg"></div>
-                <div class="absolute bottom-0 left-0 w-8 h-8 border-b-4 border-l-4 border-cyan-400 rounded-bl-lg"></div>
-                <div class="absolute bottom-0 right-0 w-8 h-8 border-b-4 border-r-4 border-cyan-400 rounded-br-lg"></div>
+        <div class="bg-slate-900 border border-slate-800 p-3.5 rounded-2xl flex flex-col gap-2 shadow-lg w-full">
+            <div class="flex justify-between items-center">
+                <h1 class="text-xs font-black text-cyan-400 uppercase tracking-wider"><i class="fa-solid fa-face-viewfinder mr-1"></i> TERMINAL KIOSK SCAN WAJAH</h1>
+                <p id="txt-db-status" onclick="ambilDatabaseSantri(true)" class="text-[10px] text-amber-400 font-bold animate-pulse cursor-pointer">Menghubungkan cloud...</p>
             </div>
-            <p id="instruksi" class="mt-6 text-xs font-black tracking-widest text-cyan-400 uppercase bg-slate-950/80 px-6 py-2 rounded-full border border-cyan-500/20">
-                Initialising AI...
-            </p>
+
+            <select id="pilihan-kegiatan" class="w-full bg-slate-950 border-2 border-slate-700 rounded-xl px-3 py-2.5 text-xs font-black text-white outline-none cursor-pointer">
+                <option value="Subuh">Jamaah Subuh</option>
+                <option value="Dzuhur">Jamaah Dzuhur</option>
+                <option value="Ashar">Jamaah Ashar</option>
+                <option value="Maghrib">Jamaah Maghrib</option>
+                <option value="Isya">Jamaah Isya</option>
+                <option value="Quranan">Ngaji al-Qur'an Bakdo Subuh</option>
+                <option value="Afsahan">Ngafsahi/Kursus Bakdo al-Qur'an</option>
+                <option value="PDF 1">Sekolah PDF Jam Pertama</option>
+                <option value="PDF 2">Sekolah PDF Jam Kedua</option>
+                <option value="PDF 3">Sekolah PDF Jam Ketiga</option>
+                <option value="Ndalem">Ngaji Ndalem Bakdo Ashar</option>
+                <option value="Sorogan">Sorogan Kitab</option>
+                <option value="Belajar">Jam Belajar</option>
+                <option value="Jumatan">Jumatan</option>
+                <option value="Ziarah">Ziarah Kubur</option>
+            </select>
         </div>
     </div>
 
-    <div class="mt-auto w-full max-w-md mx-auto pt-4 flex flex-col gap-3">
-        <a href="orangtua.html" class="w-full bg-rose-600/10 border border-rose-500/30 text-rose-400 font-bold py-3 rounded-2xl text-center text-xs uppercase tracking-widest">
-            <i class="fa-solid fa-camera-retro mr-2"></i>Cek Foto Harian
-        </a>
-    </div>
-
-    <!-- MODAL HASIL -->
-    <div id="pop-success" class="fixed inset-0 bg-slate-950/98 backdrop-blur-xl flex items-center justify-center p-6 hidden z-[100]">
-        <div class="bg-slate-900 border border-emerald-500/30 w-full max-w-sm p-8 rounded-[2.5rem] text-center shadow-2xl">
-            <div class="w-20 h-20 bg-emerald-500 rounded-full mx-auto mb-4 flex items-center justify-center shadow-[0_0_30px_rgba(16,185,129,0.4)]">
-                <i class="fa-solid fa-check text-3xl text-slate-950"></i>
-            </div>
-            <h2 class="text-xs font-black text-emerald-400 tracking-[0.3em] uppercase mb-1">BERHASIL ABSEN</h2>
-            <h1 id="txt-nama-sukses" class="text-2xl font-black text-white uppercase mb-6 tracking-tight">NAMA SANTRI</h1>
-            
-            <div class="bg-slate-950/50 rounded-3xl p-5 mb-6 border border-white/5">
-                <div class="flex justify-between text-[10px] text-slate-400 mb-1 uppercase font-bold tracking-tighter">
-                    <span>Saldo Kemarin</span>
-                    <span>Tambahan</span>
+    <!-- VIEWPORT VIDEO KAMERA -->
+    <div class="w-full max-w-md mx-auto my-auto flex flex-col justify-center items-center">
+        <div class="relative w-full aspect-square bg-slate-900 border-2 border-slate-800 rounded-3xl overflow-hidden shadow-2xl">
+            <video id="video-selfie" autoplay playsinline muted class="w-full h-full object-cover scale-x-[-1]"></video>
+            <div class="absolute inset-0 flex items-center justify-center pointer-events-none">
+                <div id="kotak-scan" class="w-64 h-64 border-4 border-dashed border-cyan-500/40 rounded-3xl flex items-center justify-center transition-all duration-300">
+                    <span id="instruksi" class="text-[10px] bg-slate-950/90 text-cyan-400 px-3 py-2 rounded-xl font-black uppercase tracking-widest border border-cyan-500/30 text-center">Memasang AI...</span>
                 </div>
-                <div class="flex justify-between items-center mb-3">
-                    <span id="pop-saldo-kemarin" class="text-sm font-bold text-white">Rp 0</span>
-                    <span id="pop-saldo-hari-ini" class="text-sm font-bold text-emerald-400">+Rp 0</span>
-                </div>
-                <div class="h-px bg-white/10 w-full mb-3"></div>
-                <p class="text-[10px] text-slate-400 uppercase font-bold tracking-widest mb-1">Total Tabungan</p>
-                <p id="pop-total-saldo" class="text-3xl font-black text-cyan-400">Rp 0</p>
             </div>
-            <button onclick="tutupPopup()" class="w-full bg-emerald-500 text-slate-950 font-black py-4 rounded-2xl text-sm uppercase tracking-widest active:scale-95 transition-all">LANJUTKAN</button>
-        </div>
-    </div>
-
-    <!-- SPINNER -->
-    <div id="loading-overlay" class="fixed inset-0 bg-slate-950/80 backdrop-blur-sm flex items-center justify-center z-[110] hidden">
-        <div class="flex flex-col items-center">
-            <div class="w-12 h-12 border-4 border-cyan-500/20 border-t-cyan-500 rounded-full animate-spin"></div>
-            <p class="text-white text-[10px] font-black mt-4 tracking-widest opacity-50 uppercase">Menyimpan Data...</p>
         </div>
     </div>
 
     <canvas id="canvas-capture" class="hidden"></canvas>
-    <iframe id="iframe-tabungan" src="tabungan.html" class="hidden"></iframe>
+
+    <!-- POP-UP UTAMA HASIL -->
+    <div id="pop-success" class="fixed inset-0 bg-slate-950/95 backdrop-blur-xl flex items-center justify-center p-6 hidden z-[110]">
+        <div class="bg-gradient-to-b from-emerald-500 to-teal-600 text-slate-950 w-full max-w-md p-6 rounded-3xl text-center shadow-2xl border-2 border-emerald-400">
+            <span class="text-xs font-black tracking-widest block opacity-85 uppercase"><i class="fa-solid fa-circle-check animate-pulse mr-1"></i> LOG JAMAAH DICATAT</span>
+            <span class="font-black text-2xl block mt-1 tracking-wide uppercase border-b border-slate-950/20 pb-3" id="txt-nama-sukses">Nama Santri</span>
+            
+            <div class="mt-4 bg-slate-950/20 rounded-2xl p-4 flex flex-col gap-3 text-center">
+                <div class="flex flex-col gap-1 border-b border-white/10 pb-2">
+                    <span class="text-[9px] font-black tracking-widest text-slate-900 opacity-75 uppercase">SALDO KEMARIN</span>
+                    <span id="pop-saldo-kemarin" class="text-lg font-black text-slate-950">Rp 0</span>
+                </div>
+
+                <div class="flex flex-col gap-1 border-b border-white/10 pb-2">
+                    <span class="text-[9px] font-black tracking-widest text-slate-900 opacity-75 uppercase">REWARD HARI INI (+)</span>
+                    <span id="pop-saldo-hari-ini" class="text-lg font-black text-white">Rp 0</span>
+                </div>
+
+                <div class="flex flex-col gap-1 pt-1">
+                    <span class="text-[10px] font-black tracking-widest text-slate-900 opacity-90 uppercase">TOTAL AKUMULASI TABUNGAN</span>
+                    <span id="pop-total-saldo" class="text-3xl font-black text-white tracking-wide">Rp 0</span>
+                </div>
+
+                <p id="pop-pesan-motivasi" class="text-xs font-bold text-slate-900 mt-2 bg-white/40 px-3 py-2.5 rounded-xl italic leading-relaxed"></p>
+            </div>
+            <button onclick="tutupPopup()" class="mt-5 w-full bg-slate-950 text-white font-black py-4 rounded-2xl text-xs uppercase tracking-widest shadow-lg active:scale-95 transition-transform">LANJUTKAN SCAN</button>
+        </div>
+    </div>
+
+    <!-- POP-UP WARNING -->
+    <div id="pop-warning" class="fixed inset-0 bg-slate-950/80 backdrop-blur-md flex items-center justify-center p-6 hidden z-[110]">
+        <div class="bg-amber-500 text-slate-950 w-full max-w-sm p-6 rounded-3xl text-center shadow-2xl border-2 border-amber-400">
+            <span class="text-xs font-black tracking-widest block opacity-75"><i class="fa-solid fa-triangle-exclamation mr-1"></i> AKSES DITOLAK</span>
+            <span class="font-black text-base block mt-1 tracking-wide" id="txt-nama-peringatan">NAMA SANTRI</span>
+            <span class="text-[11px] font-bold block mt-1 bg-slate-950/20 py-1 rounded-lg uppercase tracking-wider">Sudah Absen Pada Kegiatan Ini!</span>
+        </div>
+    </div>
 
     <script>
-        const API_URL = "https://script.google.com/macros/s/AKfycbxJ8zjyd5YLsPhpq52ntO95-Bn5gNJlKLHSozMZ1kWFJAOGir5co21ln3gpiVI9UCx2/exec";
-        let databaseSantri = [];
+        const URL_AKURAT = "https://script.google.com/macros/s/AKfycbxJ8zjyd5YLsPhpq52ntO95-Bn5gNJlKLHSozMZ1kWFJAOGir5co21ln3gpiVI9UCx2/exec";
+
+        let video = document.getElementById('video-selfie');
+        let label = document.getElementById('instruksi');
+        let kotakScan = document.getElementById('kotak-scan');
+        let dbStatus = document.getElementById('txt-db-status');
+        let canvasCap = document.getElementById('canvas-capture');
+        let iframeTabungan = document.getElementById('iframe-tabungan');
+        let loadingOverlay = document.getElementById('loading-overlay');
+
         let isProcessing = false;
-        let lastDetectedNik = "";
-        let detectionStreak = 0; // Untuk akurasi ganda
-        
-        const video = document.getElementById('video-selfie');
-        const label = document.getElementById('instruksi');
-        const dbStatus = document.getElementById('txt-db-status');
-        const canvasCap = document.getElementById('canvas-capture');
+        let databaseSantri = [];
+        let modelLoaded = false;
 
-        // 1. CARA CEPAT: LOAD DATABASE DARI CACHE
-        async function loadDatabase() {
-            const cachedData = localStorage.getItem('db_santri_v1');
-            if (cachedData) {
-                databaseSantri = JSON.parse(cachedData);
-                dbStatus.innerText = `READY: ${databaseSantri.length} SANTRI`;
-                syncDatabaseBackground(); // Update background
-            } else {
-                dbStatus.innerText = "SYNCING CLOUD...";
-                await syncDatabaseBackground();
-            }
-        }
-
-        async function syncDatabaseBackground() {
+        // SISTEM CACHE DATA UTK KECEPATAN INSTAN KEDUA & SETERUSNYA
+        async function ambilDatabaseSantri(forceRefresh = false) {
             try {
-                const res = await fetch(`${API_URL}?aksi=ambil_database`);
+                const localData = localStorage.getItem('cache_db_santri');
+                if (localData && !forceRefresh) {
+                    databaseSantri = JSON.parse(localData);
+                    dbStatus.innerText = `🟢 Kiosk Ready (${databaseSantri.length} Santri - Local)`;
+                    dbStatus.classList.remove('animate-pulse');
+                    // Sync silent di background agar data lokal tetap terbarui tanpa mengganggu user
+                    jalankanSyncBackground();
+                    return;
+                }
+
+                dbStatus.innerText = "🔄 Sync AI Face Cloud...";
+                const res = await fetch(`${URL_AKURAT}?aksi=ambil_database`, { method: "GET" });
                 const json = await res.json();
                 if (json.status === "success") {
                     databaseSantri = json.data;
-                    localStorage.setItem('db_santri_v1', JSON.stringify(json.data));
-                    dbStatus.innerText = `READY: ${databaseSantri.length} SANTRI`;
+                    localStorage.setItem('cache_db_santri', JSON.stringify(databaseSantri));
+                    dbStatus.innerText = `🟢 Kiosk Ready (${databaseSantri.length} Santri)`;
+                    dbStatus.classList.remove('animate-pulse');
                 }
-            } catch (e) { dbStatus.innerText = "OFFLINE MODE"; }
+            } catch (error) { 
+                dbStatus.innerText = `⚠️ Cloud Error`; 
+            }
         }
 
-        // 2. MULAI AI
-        window.addEventListener('DOMContentLoaded', async () => {
+        async function jalankanSyncBackground() {
             try {
-                label.innerText = "LOADING MODELS...";
-                const MODEL_URL = 'https://unpkg.com/@vladmandic/face-api/model';
+                const res = await fetch(`${URL_AKURAT}?aksi=ambil_database`, { method: "GET" });
+                const json = await res.json();
+                if (json.status === "success") {
+                    databaseSantri = json.data;
+                    localStorage.setItem('cache_db_santri', JSON.stringify(databaseSantri));
+                }
+            } catch (e) {}
+        }
+
+        function bunyikanBeep(frekuensi, durasi) {
+            try {
+                const audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+                const oscillator = audioCtx.createOscillator();
+                const gainNode = audioCtx.createGain();
+                oscillator.connect(gainNode); gainNode.connect(audioCtx.destination);
+                oscillator.type = 'sine'; oscillator.frequency.value = frekuensi;
+                gainNode.gain.setValueAtTime(0.3, audioCtx.currentTime);
+                oscillator.start(); gainNode.gain.exponentialRampToValueAtTime(0.00001, audioCtx.currentTime + durasi);
+                oscillator.stop(audioCtx.currentTime + durasi);
+            } catch (e) {}
+        }
+
+        window.addEventListener('DOMContentLoaded', async () => {
+            if (!localStorage.getItem('session_nama')) { localStorage.setItem('session_nama', 'KIOSK_MANDIRI'); }
+            try {
+                label.innerText = "MEMUAT AI KIOSK...";
+                
+                // Load Model secara paralel untuk menghemat waktu booting awal
                 await Promise.all([
-                    faceapi.nets.tinyFaceDetector.loadFromUri(MODEL_URL),
-                    faceapi.nets.faceLandmark68Net.loadFromUri(MODEL_URL),
-                    faceapi.nets.faceRecognitionNet.loadFromUri(MODEL_URL)
+                    faceapi.nets.tinyFaceDetector.loadFromUri('https://unpkg.com/@vladmandic/face-api/model'),
+                    faceapi.nets.faceLandmark68Net.loadFromUri('https://unpkg.com/@vladmandic/face-api/model'),
+                    faceapi.nets.faceRecognitionNet.loadFromUri('https://unpkg.com/@vladmandic/face-api/model')
                 ]);
                 
-                await loadDatabase();
+                modelLoaded = true;
+                await ambilDatabaseSantri();
                 
                 const stream = await navigator.mediaDevices.getUserMedia({ 
-                    video: { 
-                        facingMode: "user",
-                        width: { ideal: 640 },
-                        height: { ideal: 640 }
-                    } 
+                    video: { facingMode: "user", width: { ideal: 480 }, height: { ideal: 480 }, frameRate: { max: 30 } }, 
+                    audio: false 
                 });
                 video.srcObject = stream;
-                label.innerText = "POSISIKAN WAJAH";
+                label.innerText = "HADAPKAN WAJAH KE KAMERA";
+                
+                // LOOP PROSES DETEKSI PENGOPTIMALAN RENDER ANTI-LAG HP
+                async function deteksiLoop() {
+                    if (!isProcessing && !video.paused && !video.ended && databaseSantri.length > 0 && modelLoaded) {
+                        // inputSize 128 & scoreThreshold 0.35: Sensitif sudut bawah + sangat ringan untuk GPU HP
+                        const opsiDetektor = new faceapi.TinyFaceDetectorOptions({ inputSize: 128, scoreThreshold: 0.35 });
+                        const hasilKamera = await faceapi.detectSingleFace(video, opsiDetektor).withFaceLandmarks().withFaceDescriptor();
+                        
+                        if (hasilKamera) {
+                            await verifikasiWajahLokal(hasilKamera.descriptor);
+                        }
+                    }
+                    // Menggunakan requestAnimationFrame untuk mencegah lag UI saat HP digoyang
+                    requestAnimationFrame(deteksiLoop);
+                }
+                
+                video.addEventListener('play', () => {
+                    requestAnimationFrame(deteksiLoop);
+                });
 
-                // Loop deteksi (Interval 200ms agar HP tidak lag)
-                setInterval(detectFace, 200);
-            } catch (e) { label.innerText = "KAMERA ERROR"; }
+            } catch (e) { 
+                label.innerText = "AI OFFLINE / CAMERA ERROR"; 
+            }
         });
 
-        async function detectFace() {
-            if (isProcessing || video.paused || databaseSantri.length === 0) return;
+        window.addEventListener("message", (event) => {
+            if (event.data.aksi === "kirim_saldo_ke_pop") {
+                const d = event.data;
+                loadingOverlay.classList.add('hidden');
 
-            // Gunakan TinyFaceDetector dengan inputSize kecil agar ringan
-            const detection = await faceapi.detectSingleFace(video, new faceapi.TinyFaceDetectorOptions({ inputSize: 224, scoreThreshold: 0.5 }))
-                                        .withFaceLandmarks()
-                                        .withFaceDescriptor();
+                document.getElementById('pop-saldo-kemarin').innerText = "Rp " + Math.round(d.saldoKemarin).toLocaleString('id-ID');
+                document.getElementById('pop-saldo-hari-ini').innerText = "Rp " + Math.round(d.saldoHariIni).toLocaleString('id-ID');
+                document.getElementById('pop-total-saldo').innerText = "Rp " + Math.round(d.totalSaldo).toLocaleString('id-ID');
 
-            if (detection) {
-                matchFace(detection.descriptor);
-            } else {
-                detectionStreak = 0;
-                lastDetectedNik = "";
-            }
-        }
-
-        // 3. MATCHING DENGAN AKURASI TINGGI
-        function matchFace(descriptor) {
-            let bestMatch = { nik: "", nama: "", distance: 1.0 };
-            const THRESHOLD_PRECISION = 0.42; // Lebih rendah = lebih akurat
-
-            for (const santri of databaseSantri) {
-                const dbVector = new Float32Array(Object.values(JSON.parse(santri.vektor)));
-                const dist = faceapi.euclideanDistance(descriptor, dbVector);
-                if (dist < bestMatch.distance) {
-                    bestMatch = { nik: santri.nik, nama: santri.nama, distance: dist };
-                }
-            }
-
-            if (bestMatch.distance < THRESHOLD_PRECISION) {
-                // SISTEM STREAK: Harus terdeteksi orang yang sama 2x berturut-turut
-                if (bestMatch.nik === lastDetectedNik) {
-                    detectionStreak++;
+                let pesan = "";
+                if (d.poinHarian <= 1) {
+                    pesan = `👋 Halo ${d.nama}, ini baru kegiatan ke-${d.poinHarian} kamu hari ini. Ayo kejar kegiatan berikutnya! ✨`;
+                } else if (d.poinHarian >= 2 && d.poinHarian <= 4) {
+                    pesan = `⚠️ Perhatian ${d.nama}! Kamu baru ikut ${d.poinHarian} kegiatan hari ini. Ayo lebih semangat lagi! 💪`;
+                } else if (d.poinHarian >= 5 && d.poinHarian <= 14) {
+                    pesan = `⚡ Keren ${d.nama}! Sudah ${d.poinHarian} kegiatan kamu ikuti hari ini. Pertahankan ritme ini! 🚀`;
                 } else {
-                    detectionStreak = 1;
-                    lastDetectedNik = bestMatch.nik;
+                    pesan = `🏆 Fantastis ${d.nama}! Hari ini kamu sangat produktif dengan mengikuti ${d.poinHarian} kegiatan! 🔥`;
                 }
-
-                if (detectionStreak >= 2) {
-                    executeAbsen(bestMatch);
-                }
-            }
-        }
-
-        async function executeAbsen(santri) {
-            isProcessing = true;
-            detectionStreak = 0;
-            const kegiatan = document.getElementById('pilihan-kegiatan').value;
-            const key = `absen_${new Date().toISOString().split('T')[0]}_${santri.nik}_${kegiatan}`;
-
-            if (localStorage.getItem(key)) {
-                label.innerText = "SUDAH ABSEN HARI INI";
-                setTimeout(() => { isProcessing = false; label.innerText = "POSISIKAN WAJAH"; }, 3000);
-                return;
-            }
-
-            label.innerText = "WAJAH TERVERIFIKASI!";
-            document.getElementById('loading-overlay').classList.remove('hidden');
-            
-            // Ambil Foto
-            canvasCap.width = 320; // Perkecil foto agar upload cepat
-            canvasCap.height = 320;
-            const ctx = canvasCap.getContext('2d');
-            ctx.translate(320, 0); ctx.scale(-1, 1);
-            ctx.drawImage(video, 0, 0, 320, 320);
-            const foto = canvasCap.toDataURL('image/jpeg', 0.5);
-
-            try {
-                const res = await fetch(API_URL, {
-                    method: "POST",
-                    body: JSON.stringify({
-                        aksi: "absen_santri",
-                        nik: santri.nik,
-                        kegiatan: kegiatan,
-                        petugas: "KIOSK_AI_V2",
-                        foto: foto
-                    })
-                });
-                const result = await res.json();
                 
-                if (result.status === "success") {
-                    localStorage.setItem(key, "1");
-                    showSuccess(santri.nama, result.realtime);
-                }
-            } catch (e) {
-                alert("Gagal koneksi server");
-                isProcessing = false;
+                document.getElementById('pop-pesan-motivasi').innerText = pesan;
+                document.getElementById('pop-success').classList.remove('hidden');
             }
-            document.getElementById('loading-overlay').classList.add('hidden');
-        }
-
-        function showSuccess(nama, data) {
-            document.getElementById('txt-nama-sukses').innerText = nama;
-            document.getElementById('pop-saldo-kemarin').innerText = "Rp " + Math.round(data.saldoKemarin).toLocaleString('id-ID');
-            document.getElementById('pop-saldo-hari-ini').innerText = "+Rp " + Math.round(data.nominalHariIni).toLocaleString('id-ID');
-            document.getElementById('pop-total-saldo').innerText = "Rp " + Math.round(data.saldoKemarin + data.nominalHariIni).toLocaleString('id-ID');
-            document.getElementById('pop-success').classList.remove('hidden');
-            
-            // Suara Beep Berhasil
-            const audioCtx = new (window.AudioContext || window.webkitAudioContext)();
-            const osc = audioCtx.createOscillator();
-            osc.connect(audioCtx.destination);
-            osc.frequency.value = 880;
-            osc.start();
-            osc.stop(audioCtx.currentTime + 0.2);
-        }
+        });
 
         function tutupPopup() {
             document.getElementById('pop-success').classList.add('hidden');
             isProcessing = false;
-            label.innerText = "POSISIKAN WAJAH";
+            label.innerText = "HADAPKAN WAJAH KE KAMERA";
+            kotakScan.className = "w-64 h-64 border-4 border-dashed border-cyan-500/40 rounded-3xl flex items-center justify-center";
+        }
+
+        async function verifikasiWajahLokal(descriptorKamera) {
+            let santriDitemukan = null; 
+            // Ketepatan presisi tinggi ditingkatkan dengan memperkecil jarak minimal (anti tukar santri)
+            let jarakTerkecil = 0.40; 
+
+            for (let santri of databaseSantri) {
+                try {
+                    if (!santri.vektor) continue;
+                    let arrayVektorDb = Object.values(JSON.parse(santri.vektor));
+                    let jarak = faceapi.euclideanDistance(descriptorKamera, arrayVektorDb);
+                    
+                    if (jarak < jarakTerkecil) { 
+                        jarakTerkecil = jarak; 
+                        santriDitemukan = santri; 
+                    }
+                } catch(e){}
+            }
+
+            if (santriDitemukan) {
+                isProcessing = true;
+                const kegiatan = document.getElementById('pilihan-kegiatan').value;
+                const hariIni = new Date().toISOString().split('T')[0];
+                const storageKey = `absen_${hariIni}_${santriDitemukan.nik}_${kegiatan}`;
+
+                if (localStorage.getItem(storageKey) === "TERCATAT") {
+                    document.getElementById('txt-nama-peringatan').innerText = santriDitemukan.nama.toUpperCase();
+                    document.getElementById('pop-warning').classList.remove('hidden');
+                    bunyikanBeep(440, 0.1);
+                    setTimeout(() => { document.getElementById('pop-warning').classList.add('hidden'); isProcessing = false; }, 2000);
+                    return;
+                }
+
+                loadingOverlay.classList.remove('hidden');
+                
+                localStorage.setItem(storageKey, "TERCATAT");
+                document.getElementById('txt-nama-sukses').innerText = santriDitemukan.nama.toUpperCase();
+                kotakScan.className = "w-64 h-64 border-4 border-solid border-emerald-400 rounded-3xl bg-emerald-500/10 scale-105";
+                bunyikanBeep(1000, 0.25);
+
+                canvasCap.width = video.videoWidth; canvasCap.height = video.videoHeight;
+                const ctx = canvasCap.getContext('2d');
+                ctx.translate(canvasCap.width, 0); ctx.scale(-1, 1);
+                ctx.drawImage(video, 0, 0, canvasCap.width, canvasCap.height);
+                const dataFotoBase64 = canvasCap.toDataURL('image/jpeg', 0.25); // Mengecilkan rasio kualitas foto agar upload lebih responsif
+
+                try {
+                    const responseCloud = await fetch(URL_AKURAT, { 
+                        method: "POST", 
+                        headers: { "Content-Type": "text/plain;charset=utf-8" }, 
+                        body: JSON.stringify({
+                            aksi: "absen_santri",
+                            nik: santriDitemukan.nik,
+                            kegiatan: kegiatan,
+                            petugas: localStorage.getItem('session_nama'),
+                            foto: dataFotoBase64
+                        }) 
+                    });
+                    const hasilJson = await responseCloud.json();
+                    
+                    if (hasilJson.realtime) {
+                        iframeTabungan.contentWindow.postMessage({
+                            aksi: "minta_data_saldo",
+                            nik: santriDitemukan.nik,
+                            nama: santriDitemukan.nama,
+                            realtimeSaldo: hasilJson.realtime.nominalHariIni, 
+                            realtimeSaldoKemarin: hasilJson.realtime.saldoKemarin, 
+                            realtimePoin: hasilJson.realtime.poin
+                        }, "*");
+                    } else {
+                        loadingOverlay.classList.add('hidden');
+                        isProcessing = false;
+                    }
+                } catch (e) {
+                    loadingOverlay.classList.add('hidden');
+                    isProcessing = false;
+                }
+            }
         }
     </script>
 </body>
