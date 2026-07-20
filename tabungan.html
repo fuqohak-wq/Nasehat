@@ -1,38 +1,48 @@
 <!DOCTYPE html>
-<html>
-<body style="background:transparent;">
+<html lang="id">
+<head>
+    <meta charset="UTF-8">
+    <title>Widget Pengolah Data Tabungan</title>
+</head>
+<body style="background:transparent; margin:0; padding:0; overflow:hidden;">
     <script>
-        // Fungsi membersihkan angka dari format apapun & paksa jadi POSITIF
-        function cleanToAbs(val) {
-            if (!val) return 0;
-            // Hapus karakter non-digit kecuali titik desimal awal
-            let s = val.toString().replace(/Rp/gi, '').replace(/\s/g, '');
-            // Atasi format titik ribuan Indonesia
-            if (s.includes('.') && !s.includes(',')) {
-                let parts = s.split('.');
-                if (parts[parts.length - 1].length === 3) s = s.replace(/\./g, '');
+        // Mesin Pembersih Desimal & Minus Radikal
+        function bersihkanDanUbahPositif(nilaiMentah) {
+            if (nilaiMentah === undefined || nilaiMentah === null) return 0;
+            // Ubah ke string, bersihkan spasi & simbol
+            let str = nilaiMentah.toString().replace(/Rp/gi, '').replace(/\s/g, '');
+            
+            // Atasi format separator titik ribuan Indonesia
+            if (str.includes('.') && !str.includes(',')) {
+                let bagian = str.split('.');
+                if (bagian[bagian.length - 1].length === 3) {
+                    str = str.replace(/\./g, '');
+                }
             }
-            return Math.abs(parseFloat(s) || 0);
+            let angka = parseFloat(str) || 0;
+            return Math.abs(angka); // Konversi paksa menjadi POSITIF
         }
 
         window.addEventListener("message", (event) => {
-            const d = event.data;
-            if (d.aksi === "minta_data_saldo") {
-                // AMBIL DATA
-                let sk = cleanToAbs(d.realtimeSaldoKemarin); // Dari Spreadsheet 2
-                let sh = cleanToAbs(d.realtimeSaldo);        // Dari Spreadsheet 1 (Nominal Hari Ini)
-                
-                // KALKULASI DI SINI (Penjumlahan Murni)
-                let total = sk + sh;
+            const { nik, nama, aksi, realtimeSaldo, realtimePoin, realtimeSaldoKemarin } = event.data;
 
-                // Kirim balik ke Index.html
+            if (aksi === "minta_data_saldo" && nik) {
+                // Ambil & paksa semua data menjadi bernilai positif
+                let saldoKemarin = bersihkanDanUbahPositif(realtimeSaldoKemarin); 
+                let saldoHariIni = bersihkanDanUbahPositif(realtimeSaldo); 
+                let totalSaldo = saldoKemarin + saldoHariIni; // Penjumlahan di HTML
+
+                let poinHarian = realtimePoin !== undefined ? parseInt(realtimePoin) : 0;
+
+                // Kirim balik data mutlak ke index.html
                 window.parent.postMessage({
                     aksi: "kirim_saldo_ke_pop",
-                    saldoKemarin: sk,
-                    saldoHariIni: sh,
-                    totalSaldo: total,
-                    nama: d.nama,
-                    poinHarian: d.realtimePoin
+                    saldoKemarin: saldoKemarin,
+                    saldoHariIni: saldoHariIni,
+                    totalSaldo: totalSaldo,
+                    nama: nama,
+                    nik: nik,
+                    poinHarian: poinHarian
                 }, "*");
             }
         });
